@@ -1,0 +1,260 @@
+{
+  "product": "Axiom",
+  "scope": "local reference application",
+  "verified_on": "2026-09-25",
+  "app_version": "2.0.0",
+  "schema_version": 11,
+  "builtin_contract_version": "1.3.0",
+  "python_tests": 287,
+  "verification_note": "The Axiom 2.0 discovery gate passed 287/287 tests in 34.162 seconds on 2026-09-25. No live Slack, Jira Cloud, Confluence Cloud, webhook receiver, MCP server, or arbitrary API tenant was used. The prior Axiom 1.9 235-test result and supplied factory source checkpoint's 113 tests are historical baselines. Live-model quality, production identity/tenancy, distributed load/failover, and formal accessibility certification remain unverified production gates.",
+  "machine_verification": {
+    "current_release_gate": {
+      "status": "passed",
+      "passed": 287,
+      "total": 287,
+      "seconds": 34.162
+    },
+    "historical_axiom_1_9_full_python": {
+      "passed": 235,
+      "total": 235,
+      "seconds": 29.065
+    },
+    "historical_axiom_1_9_focused_agent_factory": {
+      "passed": 65,
+      "total": 65,
+      "breakdown": {
+        "engine": 29,
+        "fixtures_and_decisions": 15,
+        "migration": 1,
+        "runtime_and_workflow_bridge": 16,
+        "http_boundaries": 4
+      }
+    },
+    "node_syntax": [
+      "public/app.js",
+      "public/icons.js",
+      "public/theme.js"
+    ],
+    "preview_ui_contracts": {
+      "captures_passed": 2,
+      "counts_per_capture": {
+        "route_renders": 28,
+        "run_renders": 72,
+        "inspector_renders": 7,
+        "mapping_dialogs": 2,
+        "evidence_dialogs": 18,
+        "effects_dialogs": 1,
+        "repair_dialogs": 18
+      }
+    },
+    "preview_agent_factory": {
+      "scenarios": 13,
+      "runs": 13,
+      "controlled_variations": 7
+    },
+    "compileall": "passed",
+    "json_validation": "passed"
+  },
+  "features": {
+    "adaptive_agent_factory": {
+      "status": "implemented",
+      "evidence_or_limit": "Administrators can author versioned specifications with mission, instructions, permitted context, allowed capability IDs, strict input/result contracts, required evidence, stop rules, policy references, evaluation cases, and turn/tool/write/time/model-token/cost limits. Saving creates a draft; separate reviewer activation is required before workflow placement. Final release-wide browser and accessibility certification is still a gate."
+    },
+    "adaptive_runtime_and_sessions": {
+      "status": "verified",
+      "evidence_or_limit": "The shared registry-driven loop selects one structured call, clarification, or finish decision at a time; validates it against the pinned specification and capability contracts; records the actual observation; and decides again. Durable sessions cover budgets, scoped context, restart, stale-provider-result rejection, clarification/resume, explicit failure, and previously unknown registered capabilities without domain-specific planner branches."
+    },
+    "goal_agent_workflow_bridge": {
+      "status": "verified",
+      "evidence_or_limit": "Only approved specification versions become reusable Goal Agent palette entries. Workflow placements pin the specification and tool-contract version, create or resume one durable child session, keep node-start approval separate from a later discovered write approval, propagate pause/failure/cancellation, and return a typed child result downstream."
+    },
+    "adaptive_exact_action_approval": {
+      "status": "verified",
+      "evidence_or_limit": "Every adaptive write is prepared before review and persisted through the shared effect ledger. Review binds the tool/version, authoritative adapter target, stable operation key, exact arguments and payload hash, authorization and policy references, evidence references/source versions, and action fingerprint. Changed or stale actions require a new decision."
+    },
+    "agent_factory_behavior_preview": {
+      "status": "implemented",
+      "evidence_or_limit": "The interface groups controlled same-agent variations and compares persisted ordered capability traces, triggering observations, and outcomes. Bundled comparisons are explicitly fixture-only and do not claim live-model quality."
+    },
+    "scripted_agent_factory_demonstrations": {
+      "status": "verified",
+      "evidence_or_limit": "Service investigation, invoice review, and access coordination use one shared runtime and labeled scripted providers. Paired inputs produce different tool sequences; covered paths include existing-record reuse, missing information, exact write approval, and capability gaps. These local fixtures neither call an LLM nor contact external systems."
+    },
+    "trusted_factory_outcome_validation": {
+      "status": "verified",
+      "evidence_or_limit": "Bundled domains compare typed results with trusted local observations and receipts and report satisfied, contradicted, or unknown. Custom domains remain unknown until a developer registers an authoritative validator; schema and evidence-reference validity alone do not prove business success."
+    },
+    "template_lifecycle": {
+      "status": "verified",
+      "evidence_or_limit": "Empty draft through review, publication, and local execution, plus independent duplication, archive/restore, and hash-checked export/import. Archive blocks new fixture runs, draft simulations and rehearsal experiments while preserving releases and existing runs; the final browser journey verified disabled controls and restore."
+    },
+    "agent_registry_lifecycle": {
+      "status": "verified",
+      "evidence_or_limit": "Executable aliases, metadata edits, deprecation preserving published references, deletion of unused custom registrations, and refusal to delete built-ins or any draft/release/run reference."
+    },
+    "canvas_interface": {
+      "status": "verified",
+      "evidence_or_limit": "JavaScript syntax and the Node VM UI contract passed. The 2026-09-25 headed-Chrome journeys inspected the complex payment-dispute graph and verified a from-scratch workflow path: create a blank draft, open the first-step picker, place and configure nodes, use canvas/node/connection context actions, save, and reload the persisted draft. Pointer, keyboard, compact-menu, and seeded development-account editing paths are exposed. This is not collaborative editing or a complete WCAG conformance audit."
+    },
+    "workflow_builder_usability": {
+      "status": "verified",
+      "evidence_or_limit": "A new blank workflow now opens directly into step selection. The canvas supports positioned insertion, add-after with automatic connection, configuration and renaming, duplication without copying connections, input mapping, connection inspection/removal, and confirmed step removal through visible buttons and right-click menus. Undo/redo and responsive saving remain draft-scoped, and a read-only seeded role receives an explicit development-only switch-to-editor path. The localhost browser journey saved and reloaded the created workflow. Multi-user collaboration and production identity remain out of scope."
+    },
+    "persistent_night_theme": {
+      "status": "verified",
+      "evidence_or_limit": "Day/night mode covers the workflow studio and supporting application surfaces, updates the browser theme color, respects an initial saved or system preference, and stores the explicit choice in local browser storage. The localhost browser journey toggled night mode and verified that it remained active after reload. This is a per-browser presentation preference, not an organization policy or accessibility certification."
+    },
+    "demonstration_workflows": {
+      "status": "verified",
+      "evidence_or_limit": "Five persistent workflows cover payment disputes, employee access, production incident/change, vendor onboarding, and insurance claims. Each has 14 nodes and 16 edges, required typed inputs, parallel checks, both condition routes tested, complete action-record approval, release-pinned/hash-verified fixtures and defaults, safe local simulation, and receipts. Restart backfill preserves existing local edits. These are deterministic local fixtures, not live integrations."
+    },
+    "constrained_schema_and_rules": {
+      "status": "verified",
+      "evidence_or_limit": "domain.py validates the supported schema subset, instances, scalar/array bounds, finite enums/constants, nested object and additional-property assignability, bounded rules and semantic/layout hashes. Unsupported JSON-Schema syntax fails closed."
+    },
+    "typed_template_and_mapping_contracts": {
+      "status": "verified",
+      "evidence_or_limit": "Templates carry typed input schemas and built-in agents declare typed inputs and outputs. Publication rejects undeclared, non-upstream, not-on-every-path, or type-incompatible mappings; the mapping interface exposes nested compatible choices. The final browser journey verified the task form generated from the published contract."
+    },
+    "structured_graph_compiler": {
+      "status": "verified",
+      "evidence_or_limit": "workflow.py validates and compiles bounded condition/merge and parallel/join scopes while retaining legacy DAG compatibility."
+    },
+    "structured_local_runtime": {
+      "status": "verified",
+      "evidence_or_limit": "The SQLite scheduler handles conditions, skipped branches, joins and outcomes. Historical browser evidence covers a deterministic payment run with its unused route correctly skipped; current aggregate release results are maintained in the QA record. Production load and failover remain unmeasured."
+    },
+    "local_durable_execution": {
+      "status": "verified",
+      "evidence_or_limit": "SQLite restart, pinned snapshots, failure isolation."
+    },
+    "role_controlled_decisions": {
+      "status": "verified",
+      "evidence_or_limit": "The final browser journey inspected and approved the payment demonstration's complete action-record payload with an authorized reviewer. Identities remain seeded development fixtures; real corporate identity is absent."
+    },
+    "prepared_write_effects": {
+      "status": "verified",
+      "evidence_or_limit": "SQLite effects bind operation generation, canonical payload, destination/connection generation, evidence and local policy. Both per-write approval and a directly preceding explicit Approval control bind the review decision to the complete downstream prepared-action packet before dispatch. The payment browser journey inspected the full prepared payload and produced an isolated DSP-SIM record rather than a durable fixture write."
+    },
+    "mutable_connection_authority": {
+      "status": "verified",
+      "evidence_or_limit": "Administrator-only test/revoke/restore commands are persisted, generation-versioned and audited. Authority is rechecked before approval and dispatch; revocation blocks a new write without preventing exact reconciliation of an already accepted local write. The final browser journey successfully tested the local ticket connection as administrator. These are local fixtures with no secrets."
+    },
+    "external_connection_gateway": {
+      "status": "implemented",
+      "evidence_or_limit": "Schema-11 connection records, catalog and responsive Connections workspace support bounded Slack, Jira Cloud, Confluence Cloud and outbound-webhook presets. Credentials are server-side env references; public state omits reference names and secret values. Create, safe health test where registered, explicit read invocation, revoke and restore are role checked and audited. No live provider tenant or receiver was authenticated for this release."
+    },
+    "external_gateway_safety": {
+      "status": "verified",
+      "evidence_or_limit": "Strict schemas, reviewed operation IDs, derived scopes, native-provider origin/path pinning, DNS and address policy, redirect refusal, bounded response/time limits, credential-free prepared plans, exact plan verification, connection generation checks, stale-result rejection and metadata-only audits are covered by the current integration contract tests. Controlled transports establish enforcement, not provider availability."
+    },
+    "external_goal_agent_effects": {
+      "status": "implemented",
+      "evidence_or_limit": "Ready external operations compile to stable per-connection capability IDs. Goal Agent writes persist the exact connection/version/generation, operation/version, destination, method, arguments/body, operation key, evidence/source versions and plan hash; writes always pause for exact approval and relevant successful reads are rechecked before commit. Unknown remote outcomes stop without blind retry. Live provider delivery and reconciliation remain unverified."
+    },
+    "generic_openapi_connection_activation": {
+      "status": "not-implemented",
+      "evidence_or_limit": "The administrator-only HTTP/UI inspector accepts one bounded fully inlined OpenAPI 3.1 JSON document and returns a canonical hash plus unclassified, non-executable candidates; the audit stores summary metadata only. The server and interface intentionally refuse generic REST/OpenAPI connection creation. A reviewed activation and contract-diff workflow is still required."
+    },
+    "remote_mcp_host_client": {
+      "status": "not-implemented",
+      "evidence_or_limit": "The integration module defines pinned MCP request/response and tools/list client contracts. The application has no configured remote MCP host client, OAuth discovery, reviewed tool-import workflow or executable browser setup."
+    },
+    "external_oauth_lifecycle": {
+      "status": "integration-required",
+      "evidence_or_limit": "OAuth authentication mode can resolve an already provisioned access-token env reference. Consent redirects, callback/state validation, accessible-resource selection, refresh rotation, reauthorization and revocation are not implemented."
+    },
+    "external_retry_and_reconciliation": {
+      "status": "not-implemented",
+      "evidence_or_limit": "Connection retry policies and bounded retry advice are validated, but the host does not automatically retry external calls. There is no provider-specific external reconciliation API/workbench; a potentially committed write remains unknown and stopped for provider-specific or human resolution."
+    },
+    "inbound_external_webhooks": {
+      "status": "not-implemented",
+      "evidence_or_limit": "The included webhook preset is outbound only. No signed provider callback receiver, replay/deduplication inbox or durable inbound event queue is present."
+    },
+    "typed_planner": {
+      "status": "verified",
+      "evidence_or_limit": "Deterministic proposals, explicit apply, stale-revision checks, and an allowlist of at most 100 update/add/remove node, add/remove edge, bind field, insert approval, and same-implementation replacement operations. Authority-reducing proposals fail."
+    },
+    "configured_model_adapter": {
+      "status": "implemented",
+      "evidence_or_limit": "A server-side chat-completion adapter enforces structured decisions, bounded metadata, HTTPS or loopback transport, timeout/size rules, and revision-bound stale-result rejection. Missing configuration is visible and never silently falls back to scripted fixtures. Controlled loopback transport is verified; live-provider compatibility, quality, privacy, pricing, and reliability remain integration work."
+    },
+    "local_evidence_and_export": {
+      "status": "verified",
+      "evidence_or_limit": "Recorded fixture outputs, events, decisions, reduced effect summaries and an access-filtered evidence graph are exported by an authorized, audited POST with recursive sensitive-field redaction, hashed raw external content, Markdown summary and canonical SHA-256 manifest hash. The final browser journey confirmed the export and its run.exported audit entry. The hash is not an identity-backed digital signature; external source retention is absent."
+    },
+    "bounded_task_attachments": {
+      "status": "verified",
+      "evidence_or_limit": "Task start accepts at most five UTF-8 JSON/text/CSV attachments, 256 KiB each and 512 KiB total; malformed requests fail atomically, public views expose metadata and SHA-256 only, and records survive restart. No malware scanning or production object store is claimed."
+    },
+    "idempotent_task_start": {
+      "status": "verified",
+      "evidence_or_limit": "An optional actor-scoped idempotency key returns the original run for an identical request, avoids duplicate attachment ingestion, and rejects reuse with changed input."
+    },
+    "local_reminder_delivery": {
+      "status": "verified",
+      "evidence_or_limit": "Policy-derived local recipients, rate limiting, deduplication, delivery key, queued/sent transitions, connection generation and review deep link are persisted. Sent means local capture only; no external message is delivered."
+    },
+    "source_claim_evidence_graph": {
+      "status": "verified",
+      "evidence_or_limit": "Evidence domain tests cover source hashes/spans, transformations, claims/conflicts, decision packets, receipts, access inheritance and redaction; standalone graph persistence is not implemented."
+    },
+    "scenario_domain": {
+      "status": "verified",
+      "evidence_or_limit": "Versioned ten-case catalog, pinned scenario definitions/fingerprints, rejection of missing or malformed pins before accepting cached completed results, experiment-scoped write isolation, deterministic path/final-state/effect/authorization invariants, paired comparison and regression-case creation are covered by the passing full suite."
+    },
+    "required_scenario_execution": {
+      "status": "implemented",
+      "evidence_or_limit": "The server and interface expose the canonical required suite, including invariants for zero external writes and zero unauthorized effects. Historical baseline results exist; use research/QA_NOTES.md for the current release gate rather than carrying forward an earlier count."
+    },
+    "ambiguous_write_recovery": {
+      "status": "verified",
+      "evidence_or_limit": "One retained local ticket across response loss/restart/reconciliation/retry, with explicit unknown and reconciled effect states."
+    },
+    "agent_sdk_contract": {
+      "status": "verified",
+      "evidence_or_limit": "Manifest, schema-bound execution, restricted named connector calls and non-overwriting scaffolding are domain-tested; dynamic server package registration is absent."
+    },
+    "template_finding_and_agent_impact": {
+      "status": "implemented",
+      "evidence_or_limit": "Permission-filtered deterministic search and release impact analysis are domain-tested and exposed by local GET routes; template finding is wired into the task-start browser flow, while impact analysis remains API-only."
+    },
+    "reusable_insertion_blocks": {
+      "status": "verified",
+      "evidence_or_limit": "Domain expansion creates fresh deterministic node/edge IDs and provenance without mutating inputs; persistence and editor insertion are not wired."
+    },
+    "specialist_team_planning": {
+      "status": "verified",
+      "evidence_or_limit": "Domain planning enforces approved participants, roles/tools, turn/token/time/cost bounds, one commit actor and a matched-budget baseline; no team runtime or UI exists."
+    },
+    "paired_release_selection": {
+      "status": "verified",
+      "evidence_or_limit": "Domain evaluation blocks candidate permission/duplicate-effect/invariant failures and preserves active-run pins; ordinary rehearsal experiments are persisted, while paired release experiment persistence and environment promotion are not wired."
+    },
+    "corporate_oidc_and_tenancy": {
+      "status": "integration-required",
+      "evidence_or_limit": "Only seeded localhost identities exist; real OIDC, directory lifecycle, delegation/revocation and tenant isolation require a production environment."
+    },
+    "external_jira_csr_oci": {
+      "status": "integration-required",
+      "evidence_or_limit": "Jira Cloud now has a bounded reviewed outbound preset, but no live Atlassian tenant credentials or provider contract test was run. Payment, identity, incident, vendor, insurance, CSR and OCI systems remain local fixtures only. Live least-privilege credentials, tenant authorization, outcome validation and provider-specific reconciliation are required."
+    },
+    "distributed_runtime": {
+      "status": "integration-required",
+      "evidence_or_limit": "The single-process SQLite scheduler is the local authority; distributed workers, failover, replay/version operations and load evidence require a production runtime."
+    },
+    "persistent_secrets_and_oci": {
+      "status": "integration-required",
+      "evidence_or_limit": "The local external gateway accepts server-side env references and never returns reference names or values in public state. No production secret manager, OAuth token lifecycle, OCI service contract, principal, signing-key handling or tenancy verification is present."
+    },
+    "governance_workflow_integration": {
+      "status": "not-implemented",
+      "evidence_or_limit": "Blocks, teams, paired release selection and environment promotion still need persistence, authorization, API and interface workflows; this does not refer to the implemented persisted single-template rehearsal experiments."
+    },
+    "browser_visual_accessibility_checks": {
+      "status": "implemented",
+      "evidence_or_limit": "The headed-browser record now covers custom specification activation, Goal Agent workflow placement, observation-dependent and clarification paths, separate exact-action review, the schema-11 Connections catalog, safe non-executable OpenAPI inspection, truthful unavailable-provider controls, workflow creation, persisted theme, role-aware node actions, and responsive Save access. Machine syntax and Node VM contracts remain distinct evidence. Full WCAG, screen-reader, live-provider, and broad cross-browser certification remain separate work."
+    }
+  }
+}

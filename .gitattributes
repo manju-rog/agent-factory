@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.sqlite3 binary
+
+preview/** linguist-generated=true
+output_v2/** linguist-generated=true

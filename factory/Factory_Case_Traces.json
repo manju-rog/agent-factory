@@ -1,0 +1,4756 @@
+{
+  "mode": "scripted-fixture",
+  "liveModelCalled": false,
+  "approvalMode": "automatic test harness for local fixture actions only",
+  "purpose": "Verify generic runtime behavior, not model intelligence or enterprise integrations.",
+  "comparisons": [
+    {
+      "agentId": "service-investigator",
+      "sameCompiledAgent": true,
+      "differentObservedPaths": true,
+      "cases": [
+        {
+          "scenario": "service-existing",
+          "tools": [
+            "service.lookup"
+          ],
+          "outcome": "existing_work_item"
+        },
+        {
+          "scenario": "service-new",
+          "tools": [
+            "service.lookup",
+            "service.search_runbook",
+            "service.create_ticket"
+          ],
+          "outcome": "work_item_captured"
+        }
+      ]
+    },
+    {
+      "agentId": "invoice-reviewer",
+      "sameCompiledAgent": true,
+      "differentObservedPaths": true,
+      "cases": [
+        {
+          "scenario": "invoice-matched",
+          "tools": [
+            "finance.inspect_invoice",
+            "finance.lookup_policy",
+            "finance.record_decision"
+          ],
+          "outcome": "recommendation_captured"
+        },
+        {
+          "scenario": "invoice-exception",
+          "tools": [
+            "finance.inspect_invoice",
+            "finance.lookup_policy",
+            "finance.request_review"
+          ],
+          "outcome": "exception_review_captured"
+        }
+      ]
+    },
+    {
+      "agentId": "access-coordinator",
+      "sameCompiledAgent": true,
+      "differentObservedPaths": true,
+      "cases": [
+        {
+          "scenario": "access-standard",
+          "tools": [
+            "access.inspect_request",
+            "access.lookup_entitlements",
+            "access.record_grant"
+          ],
+          "outcome": "grant_proposal_captured"
+        },
+        {
+          "scenario": "access-privileged",
+          "tools": [
+            "access.inspect_request",
+            "access.lookup_entitlements",
+            "access.request_review"
+          ],
+          "outcome": "review_captured"
+        }
+      ]
+    }
+  ],
+  "controlledVariations": [
+    {
+      "scenario": "service-missing-evidence",
+      "name": "Controlled · missing evidence and clarification",
+      "variationKind": "missing-evidence",
+      "status": "completed",
+      "tools": [
+        "service.lookup"
+      ],
+      "outcome": "existing_work_item",
+      "boundaryOutcome": null,
+      "clarificationCount": 1,
+      "writeAttemptCount": 0,
+      "uniqueLocalEffects": 0,
+      "duplicateOperationPrevented": false
+    },
+    {
+      "scenario": "invoice-conflicting-records",
+      "name": "Controlled · conflicting policy records",
+      "variationKind": "conflicting-records",
+      "status": "stopped",
+      "tools": [
+        "finance.inspect_invoice",
+        "finance.lookup_policy"
+      ],
+      "outcome": null,
+      "boundaryOutcome": {
+        "condition": "conflictingEvidence",
+        "action": "escalate",
+        "callId": "call_0002",
+        "toolId": "finance.lookup_policy",
+        "sourceError": "CONFLICTING_RECORDS"
+      },
+      "clarificationCount": 0,
+      "writeAttemptCount": 0,
+      "uniqueLocalEffects": 0,
+      "duplicateOperationPrevented": false
+    },
+    {
+      "scenario": "access-denied-capability",
+      "name": "Controlled · denied entitlement capability",
+      "variationKind": "denied-capability",
+      "status": "stopped",
+      "tools": [
+        "access.inspect_request",
+        "access.lookup_entitlements"
+      ],
+      "outcome": null,
+      "boundaryOutcome": {
+        "condition": "deniedCapability",
+        "action": "escalate",
+        "callId": "call_0002",
+        "toolId": "access.lookup_entitlements",
+        "sourceError": "CAPABILITY_DENIED"
+      },
+      "clarificationCount": 0,
+      "writeAttemptCount": 0,
+      "uniqueLocalEffects": 0,
+      "duplicateOperationPrevented": false
+    },
+    {
+      "scenario": "service-unavailable",
+      "name": "Controlled · runbook service unavailable",
+      "variationKind": "unavailable-service",
+      "status": "completed",
+      "tools": [
+        "service.lookup",
+        "service.search_runbook"
+      ],
+      "outcome": "service_unavailable",
+      "boundaryOutcome": {
+        "condition": "unavailableService",
+        "action": "return_partial",
+        "callId": "call_0002",
+        "toolId": "service.search_runbook",
+        "sourceError": "SERVICE_UNAVAILABLE"
+      },
+      "clarificationCount": 0,
+      "writeAttemptCount": 0,
+      "uniqueLocalEffects": 0,
+      "duplicateOperationPrevented": false
+    },
+    {
+      "scenario": "access-unavailable-capability",
+      "name": "Controlled · requested role unavailable",
+      "variationKind": "unavailable-capability",
+      "status": "completed",
+      "tools": [
+        "access.inspect_request",
+        "access.lookup_entitlements"
+      ],
+      "outcome": "capability_gap",
+      "boundaryOutcome": null,
+      "clarificationCount": 0,
+      "writeAttemptCount": 0,
+      "uniqueLocalEffects": 0,
+      "duplicateOperationPrevented": false
+    },
+    {
+      "scenario": "service-duplicate-operation",
+      "name": "Controlled · duplicate operation replay",
+      "variationKind": "duplicate-operation",
+      "status": "completed",
+      "tools": [
+        "service.lookup",
+        "service.search_runbook",
+        "service.create_ticket"
+      ],
+      "outcome": "work_item_captured",
+      "boundaryOutcome": null,
+      "clarificationCount": 0,
+      "writeAttemptCount": 2,
+      "uniqueLocalEffects": 1,
+      "duplicateOperationPrevented": true
+    },
+    {
+      "scenario": "invoice-changed-business-condition",
+      "name": "Controlled · policy changed during review",
+      "variationKind": "changed-business-condition",
+      "status": "stopped",
+      "tools": [
+        "finance.inspect_invoice",
+        "finance.lookup_policy"
+      ],
+      "outcome": null,
+      "boundaryOutcome": {
+        "condition": "changedBusinessState",
+        "action": "escalate",
+        "callId": "call_0002",
+        "toolId": "finance.lookup_policy",
+        "sourceError": "BUSINESS_STATE_CHANGED"
+      },
+      "clarificationCount": 0,
+      "writeAttemptCount": 0,
+      "uniqueLocalEffects": 0,
+      "duplicateOperationPrevented": false
+    }
+  ],
+  "runs": [
+    {
+      "scenario": "service-existing",
+      "name": "Service · linked issue exists",
+      "variationKind": "observation-dependent-path",
+      "agentId": "service-investigator",
+      "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "service.lookup"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "existing_work_item",
+        "summary": "The local request fixture already links a work item; no duplicate capture is needed.",
+        "recordId": "LOCAL-INC-208"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.existingTicket",
+          "value": "LOCAL-INC-208"
+        },
+        {
+          "source": "facts.call_0001.summary",
+          "value": "Customers encounter intermittent login timeouts."
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "service-investigator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "reuse-existing",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The result reuses the linked work item instead of claiming a new one.",
+            "evidence": [
+              "facts.call_0001.existingTicket"
+            ]
+          },
+          {
+            "id": "no-duplicate-write",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "No local work-item capture was observed for an already-linked request.",
+            "evidence": [
+              "facts.call_0001.existingTicket"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_1df915b936df4026a7c60c6f6554b023",
+        "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+        "status": "completed",
+        "createdAt": 1790335542.875639,
+        "input": {
+          "requestId": "SR-EXISTING"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "SR-EXISTING",
+            "service": "Customer portal",
+            "summary": "Customers encounter intermittent login timeouts.",
+            "existingTicket": "LOCAL-INC-208",
+            "severity": "high",
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "service.lookup",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "e5f73826b05ed7cfd8855404dbeed2d1f33ecece0f4541c8ebeb0f5ab896d085",
+            "resultHash": "c95efeefa2d7b5a46df0c341d6e01511aa6a34c1972c1beae9a71e95e9ef63bd"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the request before selecting the next action.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_1df915b936df4026a7c60c6f6554b023",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.lookup",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "SR-EXISTING"
+              },
+              "payloadHash": "1f5fb7e565c84f948201bb1a82e85cae9663399720923f478441487cce51e8f7",
+              "operationKey": "adaptive:agent_run_1df915b936df4026a7c60c6f6554b023:call_0001",
+              "actionTarget": {
+                "toolId": "service.lookup",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.lookup",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "e5f73826b05ed7cfd8855404dbeed2d1f33ecece0f4541c8ebeb0f5ab896d085"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "service.lookup",
+            "actionHash": "e5f73826b05ed7cfd8855404dbeed2d1f33ecece0f4541c8ebeb0f5ab896d085",
+            "result": {
+              "requestId": "SR-EXISTING",
+              "service": "Customer portal",
+              "summary": "Customers encounter intermittent login timeouts.",
+              "existingTicket": "LOCAL-INC-208",
+              "severity": "high",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "existing_work_item",
+              "summary": "The local request fixture already links a work item; no duplicate capture is needed.",
+              "recordId": "LOCAL-INC-208"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.existingTicket",
+                "value": "LOCAL-INC-208"
+              },
+              {
+                "source": "facts.call_0001.summary",
+                "value": "Customers encounter intermittent login timeouts."
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 2,
+          "modelCalls": 2,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 1,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "existing_work_item",
+          "summary": "The local request fixture already links a work item; no duplicate capture is needed.",
+          "recordId": "LOCAL-INC-208"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.existingTicket",
+            "value": "LOCAL-INC-208"
+          },
+          {
+            "source": "facts.call_0001.summary",
+            "value": "Customers encounter intermittent login timeouts."
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "service-new",
+      "name": "Service · new investigation",
+      "variationKind": "observation-dependent-path",
+      "agentId": "service-investigator",
+      "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "service.lookup",
+        "service.search_runbook",
+        "service.create_ticket"
+      ],
+      "localEffectCount": 1,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 1,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "work_item_captured",
+        "summary": "A work item was captured locally with its runbook reference. No external Jira ticket was created.",
+        "recordId": "LOCAL-8CEC7F5D75"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.requestId",
+          "value": "SR-NEW"
+        },
+        {
+          "source": "facts.call_0002.articleId",
+          "value": "KB-LOGIN-07"
+        },
+        {
+          "source": "facts.call_0003.recordId",
+          "value": "LOCAL-8CEC7F5D75"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "service-investigator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "runbook-linked",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The work item is supported by a runbook observation.",
+            "evidence": [
+              "facts.call_0002.articleId"
+            ]
+          },
+          {
+            "id": "receipt-matches",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The returned record identity matches the captured receipt.",
+            "evidence": [
+              "facts.call_0003.recordId"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_94381e8012ab4c0e897d70c23ccf247e",
+        "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+        "status": "completed",
+        "createdAt": 1790335542.877847,
+        "input": {
+          "requestId": "SR-NEW"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "SR-NEW",
+            "service": "Customer portal",
+            "summary": "Customers encounter intermittent login timeouts.",
+            "existingTicket": "",
+            "severity": "high",
+            "fixture": true
+          },
+          "call_0002": {
+            "matched": true,
+            "articleId": "KB-LOGIN-07",
+            "recommendedAction": "Investigate the identity-provider connection pool.",
+            "fixture": true
+          },
+          "call_0003": {
+            "recordId": "LOCAL-8CEC7F5D75",
+            "status": "work_item_captured",
+            "capturedLocally": true,
+            "externalWrite": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "service.lookup",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "003278eb8900879ee9ef9e1d4f87fbb75dcf4f040a0c192bdb623548b740e6d7",
+            "resultHash": "6a6b62b67135ebdcf8a65b0d968e6a8942ec587f2f77868795cce1d3f9ceecac"
+          },
+          "call_0002": {
+            "toolId": "service.search_runbook",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "f761b74164b766feb8af6f940666f20dfd2917f6922a6825fdf2d3b12161686d",
+            "resultHash": "db5fd22234ef3f0c7f7ba81efcb33f7eaa419bf039188809fa047df77c71308d"
+          },
+          "call_0003": {
+            "toolId": "service.create_ticket",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "553b1ec364162bf356e93d037f9f601642696d16e8f8dbb534bbb74bda333f87",
+            "resultHash": "5901231272db2749b011c0995c12439e4148d0e7da73fc3ce4fd3796aca13499"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the request before selecting the next action.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_94381e8012ab4c0e897d70c23ccf247e",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.lookup",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "SR-NEW"
+              },
+              "payloadHash": "121052513b45249150827c0d4e461f6b52f678bbda84b8aaaa9006a4168de5bf",
+              "operationKey": "adaptive:agent_run_94381e8012ab4c0e897d70c23ccf247e:call_0001",
+              "actionTarget": {
+                "toolId": "service.lookup",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.lookup",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "003278eb8900879ee9ef9e1d4f87fbb75dcf4f040a0c192bdb623548b740e6d7"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "service.lookup",
+            "actionHash": "003278eb8900879ee9ef9e1d4f87fbb75dcf4f040a0c192bdb623548b740e6d7",
+            "result": {
+              "requestId": "SR-NEW",
+              "service": "Customer portal",
+              "summary": "Customers encounter intermittent login timeouts.",
+              "existingTicket": "",
+              "severity": "high",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "The observed request has no linked work item; retrieve relevant diagnostics before preparing one.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_94381e8012ab4c0e897d70c23ccf247e",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.search_runbook",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "service": "Customer portal",
+                "symptom": "Customers encounter intermittent login timeouts."
+              },
+              "payloadHash": "1a5eed9bb3fb3bd0debfb1f869250c0b75767dd7c5406cc580f4d372e5bf450f",
+              "operationKey": "adaptive:agent_run_94381e8012ab4c0e897d70c23ccf247e:call_0002",
+              "actionTarget": {
+                "toolId": "service.search_runbook",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.search_runbook",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "6a6b62b67135ebdcf8a65b0d968e6a8942ec587f2f77868795cce1d3f9ceecac"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "f761b74164b766feb8af6f940666f20dfd2917f6922a6825fdf2d3b12161686d"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "service.search_runbook",
+            "actionHash": "f761b74164b766feb8af6f940666f20dfd2917f6922a6825fdf2d3b12161686d",
+            "result": {
+              "matched": true,
+              "articleId": "KB-LOGIN-07",
+              "recommendedAction": "Investigate the identity-provider connection pool.",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Prepare a new local work item from the observed request and runbook. Review the exact payload before capture.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0003",
+              "sessionId": "agent_run_94381e8012ab4c0e897d70c23ccf247e",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.create_ticket",
+              "toolVersion": "1.0.0",
+              "effect": "write",
+              "arguments": {
+                "requestId": "SR-NEW",
+                "service": "Customer portal",
+                "summary": "Customers encounter intermittent login timeouts.",
+                "priority": "high",
+                "runbookReference": "KB-LOGIN-07"
+              },
+              "payloadHash": "f70d50af020a23fab13d11816f309f9064fe867f4d0ea3710120f02beefb5488",
+              "operationKey": "adaptive:agent_run_94381e8012ab4c0e897d70c23ccf247e:call_0003",
+              "actionTarget": {
+                "toolId": "service.create_ticket",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.create_ticket",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": true,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001",
+                "facts.call_0002"
+              ],
+              "sourceVersions": {
+                "call_0001": "6a6b62b67135ebdcf8a65b0d968e6a8942ec587f2f77868795cce1d3f9ceecac",
+                "call_0002": "db5fd22234ef3f0c7f7ba81efcb33f7eaa419bf039188809fa047df77c71308d"
+              },
+              "reconciliation": {
+                "classification": "idempotent-local-capture",
+                "operationKey": "required",
+                "retry": "only-after-ledger-check",
+                "reconciliation": "read-local-effect-receipt"
+              },
+              "actionHash": "553b1ec364162bf356e93d037f9f601642696d16e8f8dbb534bbb74bda333f87"
+            }
+          },
+          {
+            "sequence": 9,
+            "type": "action.approved",
+            "approved": true,
+            "actorId": "local-fixture-test-harness",
+            "actionHash": "553b1ec364162bf356e93d037f9f601642696d16e8f8dbb534bbb74bda333f87"
+          },
+          {
+            "sequence": 10,
+            "type": "tool.observed",
+            "callId": "call_0003",
+            "toolId": "service.create_ticket",
+            "actionHash": "553b1ec364162bf356e93d037f9f601642696d16e8f8dbb534bbb74bda333f87",
+            "result": {
+              "recordId": "LOCAL-8CEC7F5D75",
+              "status": "work_item_captured",
+              "capturedLocally": true,
+              "externalWrite": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 11,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 12,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "work_item_captured",
+              "summary": "A work item was captured locally with its runbook reference. No external Jira ticket was created.",
+              "recordId": "LOCAL-8CEC7F5D75"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.requestId",
+                "value": "SR-NEW"
+              },
+              {
+                "source": "facts.call_0002.articleId",
+                "value": "KB-LOGIN-07"
+              },
+              {
+                "source": "facts.call_0003.recordId",
+                "value": "LOCAL-8CEC7F5D75"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 4,
+          "modelCalls": 4,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 3,
+          "writeCalls": 1
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "work_item_captured",
+          "summary": "A work item was captured locally with its runbook reference. No external Jira ticket was created.",
+          "recordId": "LOCAL-8CEC7F5D75"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.requestId",
+            "value": "SR-NEW"
+          },
+          {
+            "source": "facts.call_0002.articleId",
+            "value": "KB-LOGIN-07"
+          },
+          {
+            "source": "facts.call_0003.recordId",
+            "value": "LOCAL-8CEC7F5D75"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "invoice-matched",
+      "name": "Invoice · within policy",
+      "variationKind": "observation-dependent-path",
+      "agentId": "invoice-reviewer",
+      "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "finance.inspect_invoice",
+        "finance.lookup_policy",
+        "finance.record_decision"
+      ],
+      "localEffectCount": 1,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 1,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "recommendation_captured",
+        "summary": "An ordinary invoice recommendation was captured locally; no payment occurred.",
+        "recordId": "LOCAL-3FFED92E38"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.variancePercent",
+          "value": 0.0
+        },
+        {
+          "source": "facts.call_0002.maxVariancePercent",
+          "value": 2.0
+        },
+        {
+          "source": "facts.call_0003.recordId",
+          "value": "LOCAL-3FFED92E38"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "invoice-reviewer",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "policy-route",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The disposition matches the observed invoice-policy comparison.",
+            "evidence": [
+              "facts.call_0001.variancePercent",
+              "facts.call_0002.maxVariancePercent"
+            ]
+          },
+          {
+            "id": "receipt-matches",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The returned record identity matches the captured receipt.",
+            "evidence": [
+              "facts.call_0003.recordId"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_697f2a3a4132480aa89eb8bc2fc2381d",
+        "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+        "status": "completed",
+        "createdAt": 1790335542.8818078,
+        "input": {
+          "invoiceId": "INV-MATCHED"
+        },
+        "facts": {
+          "call_0001": {
+            "invoiceId": "INV-MATCHED",
+            "supplier": "Example Office Supply",
+            "amount": 820.0,
+            "currency": "USD",
+            "purchaseOrder": "PO-410",
+            "variancePercent": 0.0,
+            "supplierApproved": true,
+            "fixture": true
+          },
+          "call_0002": {
+            "policyId": "FIXTURE-INVOICE-1",
+            "currency": "USD",
+            "maxVariancePercent": 2.0,
+            "maxAmountWithoutException": 5000.0,
+            "fixture": true
+          },
+          "call_0003": {
+            "recordId": "LOCAL-3FFED92E38",
+            "status": "recommendation_captured",
+            "capturedLocally": true,
+            "externalWrite": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "finance.inspect_invoice",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "cbb9b4fa5c6b94645a8946acc43b920fd1711afcdbd7551dceb043c3b1674944",
+            "resultHash": "cb91abf5245512f79ec9c454758b81f7d6978b23621354e8076edae978a2e292"
+          },
+          "call_0002": {
+            "toolId": "finance.lookup_policy",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "4f5c09ec794abcf831223ccb638e6f509fedd2e7882c4d350d8b0e6effed1468",
+            "resultHash": "abfb0d78359b330ebef96f1df7fbb9bdefdacf25e80229659c93ab24ddb10739"
+          },
+          "call_0003": {
+            "toolId": "finance.record_decision",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "418d6850768ce571b0d05750581f8faf23789b87a32a4c0a3dd90959609e9482",
+            "resultHash": "e95d418d614f21c4b052475e2a17a6cf9d490aa9602a5908c51933bfdef9ac29"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect invoice facts before selecting its disposition.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_697f2a3a4132480aa89eb8bc2fc2381d",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.inspect_invoice",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "invoiceId": "INV-MATCHED"
+              },
+              "payloadHash": "adc382faa5601a1b4cdeda9e755f612bf6e958333d0f86e54321f81c6f994e9e",
+              "operationKey": "adaptive:agent_run_697f2a3a4132480aa89eb8bc2fc2381d:call_0001",
+              "actionTarget": {
+                "toolId": "finance.inspect_invoice",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.inspect_invoice",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "cbb9b4fa5c6b94645a8946acc43b920fd1711afcdbd7551dceb043c3b1674944"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "finance.inspect_invoice",
+            "actionHash": "cbb9b4fa5c6b94645a8946acc43b920fd1711afcdbd7551dceb043c3b1674944",
+            "result": {
+              "invoiceId": "INV-MATCHED",
+              "supplier": "Example Office Supply",
+              "amount": 820.0,
+              "currency": "USD",
+              "purchaseOrder": "PO-410",
+              "variancePercent": 0.0,
+              "supplierApproved": true,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Retrieve the policy applicable to the observed invoice currency.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_697f2a3a4132480aa89eb8bc2fc2381d",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.lookup_policy",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "currency": "USD"
+              },
+              "payloadHash": "ea14a2ae6724a06e110bd27e56efaf1c5370129cec23adbae1f30761fbefe20d",
+              "operationKey": "adaptive:agent_run_697f2a3a4132480aa89eb8bc2fc2381d:call_0002",
+              "actionTarget": {
+                "toolId": "finance.lookup_policy",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.lookup_policy",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "cb91abf5245512f79ec9c454758b81f7d6978b23621354e8076edae978a2e292"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "4f5c09ec794abcf831223ccb638e6f509fedd2e7882c4d350d8b0e6effed1468"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "finance.lookup_policy",
+            "actionHash": "4f5c09ec794abcf831223ccb638e6f509fedd2e7882c4d350d8b0e6effed1468",
+            "result": {
+              "policyId": "FIXTURE-INVOICE-1",
+              "currency": "USD",
+              "maxVariancePercent": 2.0,
+              "maxAmountWithoutException": 5000.0,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Observed facts support an ordinary recommendation.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0003",
+              "sessionId": "agent_run_697f2a3a4132480aa89eb8bc2fc2381d",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.record_decision",
+              "toolVersion": "1.0.0",
+              "effect": "write",
+              "arguments": {
+                "invoiceId": "INV-MATCHED",
+                "policyId": "FIXTURE-INVOICE-1",
+                "reason": "The observed invoice matches the supplied fixture policy; recommend ordinary review.",
+                "decision": "ready_for_review"
+              },
+              "payloadHash": "10db0e37eab3ea9feb9da8501e9343d192f77a7f4de4e5e37c2c6a5b300454cb",
+              "operationKey": "adaptive:agent_run_697f2a3a4132480aa89eb8bc2fc2381d:call_0003",
+              "actionTarget": {
+                "toolId": "finance.record_decision",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.record_decision",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": true,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001",
+                "facts.call_0002"
+              ],
+              "sourceVersions": {
+                "call_0001": "cb91abf5245512f79ec9c454758b81f7d6978b23621354e8076edae978a2e292",
+                "call_0002": "abfb0d78359b330ebef96f1df7fbb9bdefdacf25e80229659c93ab24ddb10739"
+              },
+              "reconciliation": {
+                "classification": "idempotent-local-capture",
+                "operationKey": "required",
+                "retry": "only-after-ledger-check",
+                "reconciliation": "read-local-effect-receipt"
+              },
+              "actionHash": "418d6850768ce571b0d05750581f8faf23789b87a32a4c0a3dd90959609e9482"
+            }
+          },
+          {
+            "sequence": 9,
+            "type": "action.approved",
+            "approved": true,
+            "actorId": "local-fixture-test-harness",
+            "actionHash": "418d6850768ce571b0d05750581f8faf23789b87a32a4c0a3dd90959609e9482"
+          },
+          {
+            "sequence": 10,
+            "type": "tool.observed",
+            "callId": "call_0003",
+            "toolId": "finance.record_decision",
+            "actionHash": "418d6850768ce571b0d05750581f8faf23789b87a32a4c0a3dd90959609e9482",
+            "result": {
+              "recordId": "LOCAL-3FFED92E38",
+              "status": "recommendation_captured",
+              "capturedLocally": true,
+              "externalWrite": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 11,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 12,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "recommendation_captured",
+              "summary": "An ordinary invoice recommendation was captured locally; no payment occurred.",
+              "recordId": "LOCAL-3FFED92E38"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.variancePercent",
+                "value": 0.0
+              },
+              {
+                "source": "facts.call_0002.maxVariancePercent",
+                "value": 2.0
+              },
+              {
+                "source": "facts.call_0003.recordId",
+                "value": "LOCAL-3FFED92E38"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 4,
+          "modelCalls": 4,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 3,
+          "writeCalls": 1
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "recommendation_captured",
+          "summary": "An ordinary invoice recommendation was captured locally; no payment occurred.",
+          "recordId": "LOCAL-3FFED92E38"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.variancePercent",
+            "value": 0.0
+          },
+          {
+            "source": "facts.call_0002.maxVariancePercent",
+            "value": 2.0
+          },
+          {
+            "source": "facts.call_0003.recordId",
+            "value": "LOCAL-3FFED92E38"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "invoice-exception",
+      "name": "Invoice · variance exception",
+      "variationKind": "observation-dependent-path",
+      "agentId": "invoice-reviewer",
+      "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "finance.inspect_invoice",
+        "finance.lookup_policy",
+        "finance.request_review"
+      ],
+      "localEffectCount": 1,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 1,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "exception_review_captured",
+        "summary": "An invoice exception review was captured locally; no payment occurred.",
+        "recordId": "LOCAL-B2C7B9A854"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.variancePercent",
+          "value": 26.83
+        },
+        {
+          "source": "facts.call_0002.maxVariancePercent",
+          "value": 2.0
+        },
+        {
+          "source": "facts.call_0003.recordId",
+          "value": "LOCAL-B2C7B9A854"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "invoice-reviewer",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "policy-route",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The disposition matches the observed invoice-policy comparison.",
+            "evidence": [
+              "facts.call_0001.variancePercent",
+              "facts.call_0002.maxVariancePercent"
+            ]
+          },
+          {
+            "id": "receipt-matches",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The returned record identity matches the captured receipt.",
+            "evidence": [
+              "facts.call_0003.recordId"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_1438c09dc1f24c34b1bc12105e27f7b6",
+        "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+        "status": "completed",
+        "createdAt": 1790335542.8871832,
+        "input": {
+          "invoiceId": "INV-EXCEPTION"
+        },
+        "facts": {
+          "call_0001": {
+            "invoiceId": "INV-EXCEPTION",
+            "supplier": "Example Office Supply",
+            "amount": 1040.0,
+            "currency": "USD",
+            "purchaseOrder": "PO-410",
+            "variancePercent": 26.83,
+            "supplierApproved": true,
+            "fixture": true
+          },
+          "call_0002": {
+            "policyId": "FIXTURE-INVOICE-1",
+            "currency": "USD",
+            "maxVariancePercent": 2.0,
+            "maxAmountWithoutException": 5000.0,
+            "fixture": true
+          },
+          "call_0003": {
+            "recordId": "LOCAL-B2C7B9A854",
+            "status": "exception_review_captured",
+            "capturedLocally": true,
+            "externalWrite": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "finance.inspect_invoice",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "3b9596454f1ad98700bcec896172c7c213030bedcfc8ce208dfb0f2fa4f52ddf",
+            "resultHash": "2d0d65b5b82069e3125667a5316dbe222bb08cb063fc52424fd7dbada767b1a7"
+          },
+          "call_0002": {
+            "toolId": "finance.lookup_policy",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "d1b8bb3801f72370779326b55463aa2ddda7f9f0194d3714bb528acc045aa67f",
+            "resultHash": "abfb0d78359b330ebef96f1df7fbb9bdefdacf25e80229659c93ab24ddb10739"
+          },
+          "call_0003": {
+            "toolId": "finance.request_review",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "2f8835a3cd8f4b2ac2d81eb968934afb32d04feaab1b7b7ae83eb43320711ab7",
+            "resultHash": "60873b1bf0c005f7db216555e4fdf0484d6d53310f192dfa23b250e6daaacc26"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect invoice facts before selecting its disposition.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_1438c09dc1f24c34b1bc12105e27f7b6",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.inspect_invoice",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "invoiceId": "INV-EXCEPTION"
+              },
+              "payloadHash": "5aca08fbe8c29587bfa4fe156f639edc24dda1f6703d15c5c685e892a4189695",
+              "operationKey": "adaptive:agent_run_1438c09dc1f24c34b1bc12105e27f7b6:call_0001",
+              "actionTarget": {
+                "toolId": "finance.inspect_invoice",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.inspect_invoice",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "3b9596454f1ad98700bcec896172c7c213030bedcfc8ce208dfb0f2fa4f52ddf"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "finance.inspect_invoice",
+            "actionHash": "3b9596454f1ad98700bcec896172c7c213030bedcfc8ce208dfb0f2fa4f52ddf",
+            "result": {
+              "invoiceId": "INV-EXCEPTION",
+              "supplier": "Example Office Supply",
+              "amount": 1040.0,
+              "currency": "USD",
+              "purchaseOrder": "PO-410",
+              "variancePercent": 26.83,
+              "supplierApproved": true,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Retrieve the policy applicable to the observed invoice currency.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_1438c09dc1f24c34b1bc12105e27f7b6",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.lookup_policy",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "currency": "USD"
+              },
+              "payloadHash": "ea14a2ae6724a06e110bd27e56efaf1c5370129cec23adbae1f30761fbefe20d",
+              "operationKey": "adaptive:agent_run_1438c09dc1f24c34b1bc12105e27f7b6:call_0002",
+              "actionTarget": {
+                "toolId": "finance.lookup_policy",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.lookup_policy",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "2d0d65b5b82069e3125667a5316dbe222bb08cb063fc52424fd7dbada767b1a7"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "d1b8bb3801f72370779326b55463aa2ddda7f9f0194d3714bb528acc045aa67f"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "finance.lookup_policy",
+            "actionHash": "d1b8bb3801f72370779326b55463aa2ddda7f9f0194d3714bb528acc045aa67f",
+            "result": {
+              "policyId": "FIXTURE-INVOICE-1",
+              "currency": "USD",
+              "maxVariancePercent": 2.0,
+              "maxAmountWithoutException": 5000.0,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Observed exceptions require specialist review.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0003",
+              "sessionId": "agent_run_1438c09dc1f24c34b1bc12105e27f7b6",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.request_review",
+              "toolVersion": "1.0.0",
+              "effect": "write",
+              "arguments": {
+                "invoiceId": "INV-EXCEPTION",
+                "policyId": "FIXTURE-INVOICE-1",
+                "reason": "Observed variance of 26.83% exceeds 2.0% policy limit."
+              },
+              "payloadHash": "8294f41cc3ebcc618d75e3e3a77480e747392114009b9a6b2b168e0090780e67",
+              "operationKey": "adaptive:agent_run_1438c09dc1f24c34b1bc12105e27f7b6:call_0003",
+              "actionTarget": {
+                "toolId": "finance.request_review",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.request_review",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": true,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001",
+                "facts.call_0002"
+              ],
+              "sourceVersions": {
+                "call_0001": "2d0d65b5b82069e3125667a5316dbe222bb08cb063fc52424fd7dbada767b1a7",
+                "call_0002": "abfb0d78359b330ebef96f1df7fbb9bdefdacf25e80229659c93ab24ddb10739"
+              },
+              "reconciliation": {
+                "classification": "idempotent-local-capture",
+                "operationKey": "required",
+                "retry": "only-after-ledger-check",
+                "reconciliation": "read-local-effect-receipt"
+              },
+              "actionHash": "2f8835a3cd8f4b2ac2d81eb968934afb32d04feaab1b7b7ae83eb43320711ab7"
+            }
+          },
+          {
+            "sequence": 9,
+            "type": "action.approved",
+            "approved": true,
+            "actorId": "local-fixture-test-harness",
+            "actionHash": "2f8835a3cd8f4b2ac2d81eb968934afb32d04feaab1b7b7ae83eb43320711ab7"
+          },
+          {
+            "sequence": 10,
+            "type": "tool.observed",
+            "callId": "call_0003",
+            "toolId": "finance.request_review",
+            "actionHash": "2f8835a3cd8f4b2ac2d81eb968934afb32d04feaab1b7b7ae83eb43320711ab7",
+            "result": {
+              "recordId": "LOCAL-B2C7B9A854",
+              "status": "exception_review_captured",
+              "capturedLocally": true,
+              "externalWrite": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 11,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 12,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "exception_review_captured",
+              "summary": "An invoice exception review was captured locally; no payment occurred.",
+              "recordId": "LOCAL-B2C7B9A854"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.variancePercent",
+                "value": 26.83
+              },
+              {
+                "source": "facts.call_0002.maxVariancePercent",
+                "value": 2.0
+              },
+              {
+                "source": "facts.call_0003.recordId",
+                "value": "LOCAL-B2C7B9A854"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 4,
+          "modelCalls": 4,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 3,
+          "writeCalls": 1
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "exception_review_captured",
+          "summary": "An invoice exception review was captured locally; no payment occurred.",
+          "recordId": "LOCAL-B2C7B9A854"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.variancePercent",
+            "value": 26.83
+          },
+          {
+            "source": "facts.call_0002.maxVariancePercent",
+            "value": 2.0
+          },
+          {
+            "source": "facts.call_0003.recordId",
+            "value": "LOCAL-B2C7B9A854"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "access-standard",
+      "name": "Access · standard role",
+      "variationKind": "observation-dependent-path",
+      "agentId": "access-coordinator",
+      "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "access.inspect_request",
+        "access.lookup_entitlements",
+        "access.record_grant"
+      ],
+      "localEffectCount": 1,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 1,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "grant_proposal_captured",
+        "summary": "A grant proposal was captured locally; no access was granted.",
+        "recordId": "LOCAL-23D25C0268"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.requestId",
+          "value": "AR-STANDARD"
+        },
+        {
+          "source": "facts.call_0002.risk",
+          "value": "standard"
+        },
+        {
+          "source": "facts.call_0002.managerApprovalOnFile",
+          "value": true
+        },
+        {
+          "source": "facts.call_0003.recordId",
+          "value": "LOCAL-23D25C0268"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "access-coordinator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "risk-route",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The proposed path matches the observed risk and approval state.",
+            "evidence": [
+              "facts.call_0002.risk",
+              "facts.call_0002.managerApprovalOnFile"
+            ]
+          },
+          {
+            "id": "receipt-matches",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The returned record identity matches the captured receipt.",
+            "evidence": [
+              "facts.call_0003.recordId"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_1a036614c18a4c17ab81946d92c720d8",
+        "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+        "status": "completed",
+        "createdAt": 1790335542.8921149,
+        "input": {
+          "requestId": "AR-STANDARD"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "AR-STANDARD",
+            "userId": "fixture-user-14",
+            "resource": "Analytics workspace",
+            "requestedRole": "viewer",
+            "fixture": true
+          },
+          "call_0002": {
+            "currentRole": "none",
+            "risk": "standard",
+            "managerApprovalOnFile": true,
+            "roleAvailable": true,
+            "fixture": true
+          },
+          "call_0003": {
+            "recordId": "LOCAL-23D25C0268",
+            "status": "grant_proposal_captured",
+            "capturedLocally": true,
+            "externalWrite": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "access.inspect_request",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "c3449c0b849ac10a6cdde4e317779a454f7ef0087a99cf12254d8795094b36c7",
+            "resultHash": "a6707f0535b3c86ac97ab9d8bd06c342f3c467c7b01e10db46a3743e1627801f"
+          },
+          "call_0002": {
+            "toolId": "access.lookup_entitlements",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "d00e0a7e2e68212daa8d54270226246e98852a5d0d4c2fc70012cfc8e9222347",
+            "resultHash": "972ad46e6e2cd7a8ec6b309c8e3ce6b76ea3f8e29584ba2f57491be85b62462f"
+          },
+          "call_0003": {
+            "toolId": "access.record_grant",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "12637e9c9f5f15e4d44a5272987c679188f8a8b4f63df339d85d84a4ba899b46",
+            "resultHash": "ef41e862b0bf1f6f038f0ccf818be147ff2966114c3788addd979a20aa49900b"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the requested entitlement first.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_1a036614c18a4c17ab81946d92c720d8",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.inspect_request",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "AR-STANDARD"
+              },
+              "payloadHash": "6ca4d0b5e2ce1a5ec39081d9498f45ec226b19196b2f6a24bb520342ac89c802",
+              "operationKey": "adaptive:agent_run_1a036614c18a4c17ab81946d92c720d8:call_0001",
+              "actionTarget": {
+                "toolId": "access.inspect_request",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.inspect_request",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "c3449c0b849ac10a6cdde4e317779a454f7ef0087a99cf12254d8795094b36c7"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "access.inspect_request",
+            "actionHash": "c3449c0b849ac10a6cdde4e317779a454f7ef0087a99cf12254d8795094b36c7",
+            "result": {
+              "requestId": "AR-STANDARD",
+              "userId": "fixture-user-14",
+              "resource": "Analytics workspace",
+              "requestedRole": "viewer",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Check existing access, role availability and approval evidence.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_1a036614c18a4c17ab81946d92c720d8",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.lookup_entitlements",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "userId": "fixture-user-14",
+                "resource": "Analytics workspace",
+                "requestedRole": "viewer"
+              },
+              "payloadHash": "233c8a98e60b7e37451e219b0bf55e2596542d3da9c52888beedc0fc4263731e",
+              "operationKey": "adaptive:agent_run_1a036614c18a4c17ab81946d92c720d8:call_0002",
+              "actionTarget": {
+                "toolId": "access.lookup_entitlements",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.lookup_entitlements",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "a6707f0535b3c86ac97ab9d8bd06c342f3c467c7b01e10db46a3743e1627801f"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "d00e0a7e2e68212daa8d54270226246e98852a5d0d4c2fc70012cfc8e9222347"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "access.lookup_entitlements",
+            "actionHash": "d00e0a7e2e68212daa8d54270226246e98852a5d0d4c2fc70012cfc8e9222347",
+            "result": {
+              "currentRole": "none",
+              "risk": "standard",
+              "managerApprovalOnFile": true,
+              "roleAvailable": true,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "The observed role is standard and manager approval is present.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0003",
+              "sessionId": "agent_run_1a036614c18a4c17ab81946d92c720d8",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.record_grant",
+              "toolVersion": "1.0.0",
+              "effect": "write",
+              "arguments": {
+                "requestId": "AR-STANDARD",
+                "userId": "fixture-user-14",
+                "resource": "Analytics workspace",
+                "role": "viewer",
+                "reason": "The observed role is standard and manager approval is present."
+              },
+              "payloadHash": "f4dc6b0fe9fb26cd8ebc5a52028bbc25e65dcad5ac69987aee5b82c76bb9dc83",
+              "operationKey": "adaptive:agent_run_1a036614c18a4c17ab81946d92c720d8:call_0003",
+              "actionTarget": {
+                "toolId": "access.record_grant",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.record_grant",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": true,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001",
+                "facts.call_0002"
+              ],
+              "sourceVersions": {
+                "call_0001": "a6707f0535b3c86ac97ab9d8bd06c342f3c467c7b01e10db46a3743e1627801f",
+                "call_0002": "972ad46e6e2cd7a8ec6b309c8e3ce6b76ea3f8e29584ba2f57491be85b62462f"
+              },
+              "reconciliation": {
+                "classification": "idempotent-local-capture",
+                "operationKey": "required",
+                "retry": "only-after-ledger-check",
+                "reconciliation": "read-local-effect-receipt"
+              },
+              "actionHash": "12637e9c9f5f15e4d44a5272987c679188f8a8b4f63df339d85d84a4ba899b46"
+            }
+          },
+          {
+            "sequence": 9,
+            "type": "action.approved",
+            "approved": true,
+            "actorId": "local-fixture-test-harness",
+            "actionHash": "12637e9c9f5f15e4d44a5272987c679188f8a8b4f63df339d85d84a4ba899b46"
+          },
+          {
+            "sequence": 10,
+            "type": "tool.observed",
+            "callId": "call_0003",
+            "toolId": "access.record_grant",
+            "actionHash": "12637e9c9f5f15e4d44a5272987c679188f8a8b4f63df339d85d84a4ba899b46",
+            "result": {
+              "recordId": "LOCAL-23D25C0268",
+              "status": "grant_proposal_captured",
+              "capturedLocally": true,
+              "externalWrite": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 11,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 12,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "grant_proposal_captured",
+              "summary": "A grant proposal was captured locally; no access was granted.",
+              "recordId": "LOCAL-23D25C0268"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.requestId",
+                "value": "AR-STANDARD"
+              },
+              {
+                "source": "facts.call_0002.risk",
+                "value": "standard"
+              },
+              {
+                "source": "facts.call_0002.managerApprovalOnFile",
+                "value": true
+              },
+              {
+                "source": "facts.call_0003.recordId",
+                "value": "LOCAL-23D25C0268"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 4,
+          "modelCalls": 4,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 3,
+          "writeCalls": 1
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "grant_proposal_captured",
+          "summary": "A grant proposal was captured locally; no access was granted.",
+          "recordId": "LOCAL-23D25C0268"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.requestId",
+            "value": "AR-STANDARD"
+          },
+          {
+            "source": "facts.call_0002.risk",
+            "value": "standard"
+          },
+          {
+            "source": "facts.call_0002.managerApprovalOnFile",
+            "value": true
+          },
+          {
+            "source": "facts.call_0003.recordId",
+            "value": "LOCAL-23D25C0268"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "access-privileged",
+      "name": "Access · privileged role",
+      "variationKind": "observation-dependent-path",
+      "agentId": "access-coordinator",
+      "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "access.inspect_request",
+        "access.lookup_entitlements",
+        "access.request_review"
+      ],
+      "localEffectCount": 1,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 1,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "review_captured",
+        "summary": "A privileged-access review request was captured locally; no access was granted.",
+        "recordId": "LOCAL-4F7489B170"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.requestId",
+          "value": "AR-PRIVILEGED"
+        },
+        {
+          "source": "facts.call_0002.risk",
+          "value": "privileged"
+        },
+        {
+          "source": "facts.call_0002.managerApprovalOnFile",
+          "value": false
+        },
+        {
+          "source": "facts.call_0003.recordId",
+          "value": "LOCAL-4F7489B170"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "access-coordinator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "risk-route",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The proposed path matches the observed risk and approval state.",
+            "evidence": [
+              "facts.call_0002.risk",
+              "facts.call_0002.managerApprovalOnFile"
+            ]
+          },
+          {
+            "id": "receipt-matches",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The returned record identity matches the captured receipt.",
+            "evidence": [
+              "facts.call_0003.recordId"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_cb5259f402114f22be53c3383580a41c",
+        "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+        "status": "completed",
+        "createdAt": 1790335542.8957708,
+        "input": {
+          "requestId": "AR-PRIVILEGED"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "AR-PRIVILEGED",
+            "userId": "fixture-user-14",
+            "resource": "Analytics workspace",
+            "requestedRole": "administrator",
+            "fixture": true
+          },
+          "call_0002": {
+            "currentRole": "none",
+            "risk": "privileged",
+            "managerApprovalOnFile": false,
+            "roleAvailable": true,
+            "fixture": true
+          },
+          "call_0003": {
+            "recordId": "LOCAL-4F7489B170",
+            "status": "privileged_review_captured",
+            "capturedLocally": true,
+            "externalWrite": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "access.inspect_request",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "ca9d516a43193fff15f577f5ed73f33d1aa10671816dbf72a9d021cdd1cbc840",
+            "resultHash": "51b9375db59f7f4206b44ed85f8e1898f9edce6cfdee5c9f8810016474001d26"
+          },
+          "call_0002": {
+            "toolId": "access.lookup_entitlements",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "eb8c068c040a52382ca71f3c3e5719433f0b1f5cb2e8bf6562257f2883be5e55",
+            "resultHash": "e549a01afbb368d07dd3acdf21c06167327f3cb85e787f9f21bc4e01063ad23f"
+          },
+          "call_0003": {
+            "toolId": "access.request_review",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "d32e8a8ce17b86ee3a7a814e1499dd50cfbba2bde68e90910f32f857357fa09c",
+            "resultHash": "a775e907a8613258b8553643d62959c0509da4fab6b8e1850311a648f58c5684"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the requested entitlement first.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_cb5259f402114f22be53c3383580a41c",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.inspect_request",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "AR-PRIVILEGED"
+              },
+              "payloadHash": "2b9369a9d04435804f20165cbd1bf7a81628e3e57df35c4cb7b64a6ce69f2702",
+              "operationKey": "adaptive:agent_run_cb5259f402114f22be53c3383580a41c:call_0001",
+              "actionTarget": {
+                "toolId": "access.inspect_request",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.inspect_request",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "ca9d516a43193fff15f577f5ed73f33d1aa10671816dbf72a9d021cdd1cbc840"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "access.inspect_request",
+            "actionHash": "ca9d516a43193fff15f577f5ed73f33d1aa10671816dbf72a9d021cdd1cbc840",
+            "result": {
+              "requestId": "AR-PRIVILEGED",
+              "userId": "fixture-user-14",
+              "resource": "Analytics workspace",
+              "requestedRole": "administrator",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Check existing access, role availability and approval evidence.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_cb5259f402114f22be53c3383580a41c",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.lookup_entitlements",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "userId": "fixture-user-14",
+                "resource": "Analytics workspace",
+                "requestedRole": "administrator"
+              },
+              "payloadHash": "5bc096057d3bcabed1c27437244d827fb0ca909fa19e2053d04a39c553b4cf7e",
+              "operationKey": "adaptive:agent_run_cb5259f402114f22be53c3383580a41c:call_0002",
+              "actionTarget": {
+                "toolId": "access.lookup_entitlements",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.lookup_entitlements",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "51b9375db59f7f4206b44ed85f8e1898f9edce6cfdee5c9f8810016474001d26"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "eb8c068c040a52382ca71f3c3e5719433f0b1f5cb2e8bf6562257f2883be5e55"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "access.lookup_entitlements",
+            "actionHash": "eb8c068c040a52382ca71f3c3e5719433f0b1f5cb2e8bf6562257f2883be5e55",
+            "result": {
+              "currentRole": "none",
+              "risk": "privileged",
+              "managerApprovalOnFile": false,
+              "roleAvailable": true,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Privileged access or missing approval requires specialist review.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0003",
+              "sessionId": "agent_run_cb5259f402114f22be53c3383580a41c",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.request_review",
+              "toolVersion": "1.0.0",
+              "effect": "write",
+              "arguments": {
+                "requestId": "AR-PRIVILEGED",
+                "userId": "fixture-user-14",
+                "resource": "Analytics workspace",
+                "role": "administrator",
+                "reason": "Privileged access or missing approval requires specialist review."
+              },
+              "payloadHash": "f273b0837635e6a179a5c2ec5be46eda2490646dca2270516389bf204ebf855a",
+              "operationKey": "adaptive:agent_run_cb5259f402114f22be53c3383580a41c:call_0003",
+              "actionTarget": {
+                "toolId": "access.request_review",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.request_review",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": true,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001",
+                "facts.call_0002"
+              ],
+              "sourceVersions": {
+                "call_0001": "51b9375db59f7f4206b44ed85f8e1898f9edce6cfdee5c9f8810016474001d26",
+                "call_0002": "e549a01afbb368d07dd3acdf21c06167327f3cb85e787f9f21bc4e01063ad23f"
+              },
+              "reconciliation": {
+                "classification": "idempotent-local-capture",
+                "operationKey": "required",
+                "retry": "only-after-ledger-check",
+                "reconciliation": "read-local-effect-receipt"
+              },
+              "actionHash": "d32e8a8ce17b86ee3a7a814e1499dd50cfbba2bde68e90910f32f857357fa09c"
+            }
+          },
+          {
+            "sequence": 9,
+            "type": "action.approved",
+            "approved": true,
+            "actorId": "local-fixture-test-harness",
+            "actionHash": "d32e8a8ce17b86ee3a7a814e1499dd50cfbba2bde68e90910f32f857357fa09c"
+          },
+          {
+            "sequence": 10,
+            "type": "tool.observed",
+            "callId": "call_0003",
+            "toolId": "access.request_review",
+            "actionHash": "d32e8a8ce17b86ee3a7a814e1499dd50cfbba2bde68e90910f32f857357fa09c",
+            "result": {
+              "recordId": "LOCAL-4F7489B170",
+              "status": "privileged_review_captured",
+              "capturedLocally": true,
+              "externalWrite": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 11,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 12,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "review_captured",
+              "summary": "A privileged-access review request was captured locally; no access was granted.",
+              "recordId": "LOCAL-4F7489B170"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.requestId",
+                "value": "AR-PRIVILEGED"
+              },
+              {
+                "source": "facts.call_0002.risk",
+                "value": "privileged"
+              },
+              {
+                "source": "facts.call_0002.managerApprovalOnFile",
+                "value": false
+              },
+              {
+                "source": "facts.call_0003.recordId",
+                "value": "LOCAL-4F7489B170"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 4,
+          "modelCalls": 4,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 3,
+          "writeCalls": 1
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "review_captured",
+          "summary": "A privileged-access review request was captured locally; no access was granted.",
+          "recordId": "LOCAL-4F7489B170"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.requestId",
+            "value": "AR-PRIVILEGED"
+          },
+          {
+            "source": "facts.call_0002.risk",
+            "value": "privileged"
+          },
+          {
+            "source": "facts.call_0002.managerApprovalOnFile",
+            "value": false
+          },
+          {
+            "source": "facts.call_0003.recordId",
+            "value": "LOCAL-4F7489B170"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "service-missing-evidence",
+      "name": "Controlled · missing evidence and clarification",
+      "variationKind": "missing-evidence",
+      "agentId": "service-investigator",
+      "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "service.lookup"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 1,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "existing_work_item",
+        "summary": "The local request fixture already links a work item; no duplicate capture is needed.",
+        "recordId": "LOCAL-INC-208"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.existingTicket",
+          "value": "LOCAL-INC-208"
+        },
+        {
+          "source": "facts.call_0001.summary",
+          "value": "Customers encounter intermittent login timeouts."
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "service-investigator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "reuse-existing",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The result reuses the linked work item instead of claiming a new one.",
+            "evidence": [
+              "facts.call_0001.existingTicket"
+            ]
+          },
+          {
+            "id": "no-duplicate-write",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "No local work-item capture was observed for an already-linked request.",
+            "evidence": [
+              "facts.call_0001.existingTicket"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_2f5b38cf894746e4b4f5ae370a4f716b",
+        "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+        "status": "completed",
+        "createdAt": 1790335542.9010189,
+        "input": {
+          "requestId": "SR-EXISTING"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "SR-EXISTING",
+            "service": "Customer portal",
+            "summary": "Customers encounter intermittent login timeouts.",
+            "existingTicket": "LOCAL-INC-208",
+            "severity": "high",
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "service.lookup",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "a36e15103ef828ebcabcf1f63cba924b351fef1b8ca938a81b77c881ee480f33",
+            "resultHash": "c95efeefa2d7b5a46df0c341d6e01511aa6a34c1972c1beae9a71e95e9ef63bd"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "ask",
+            "reason": "A request identifier is needed before retrieving scoped service facts.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "input.requested",
+            "question": "Which service request should I investigate?",
+            "fields": [
+              "input.requestId"
+            ]
+          },
+          {
+            "sequence": 3,
+            "type": "input.supplied",
+            "fields": [
+              "input.requestId"
+            ]
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the request before selecting the next action.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_2f5b38cf894746e4b4f5ae370a4f716b",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.lookup",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "SR-EXISTING"
+              },
+              "payloadHash": "1f5fb7e565c84f948201bb1a82e85cae9663399720923f478441487cce51e8f7",
+              "operationKey": "adaptive:agent_run_2f5b38cf894746e4b4f5ae370a4f716b:call_0001",
+              "actionTarget": {
+                "toolId": "service.lookup",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.lookup",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "a36e15103ef828ebcabcf1f63cba924b351fef1b8ca938a81b77c881ee480f33"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "service.lookup",
+            "actionHash": "a36e15103ef828ebcabcf1f63cba924b351fef1b8ca938a81b77c881ee480f33",
+            "result": {
+              "requestId": "SR-EXISTING",
+              "service": "Customer portal",
+              "summary": "Customers encounter intermittent login timeouts.",
+              "existingTicket": "LOCAL-INC-208",
+              "severity": "high",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "existing_work_item",
+              "summary": "The local request fixture already links a work item; no duplicate capture is needed.",
+              "recordId": "LOCAL-INC-208"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.existingTicket",
+                "value": "LOCAL-INC-208"
+              },
+              {
+                "source": "facts.call_0001.summary",
+                "value": "Customers encounter intermittent login timeouts."
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 3,
+          "modelCalls": 3,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 1,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "existing_work_item",
+          "summary": "The local request fixture already links a work item; no duplicate capture is needed.",
+          "recordId": "LOCAL-INC-208"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.existingTicket",
+            "value": "LOCAL-INC-208"
+          },
+          {
+            "source": "facts.call_0001.summary",
+            "value": "Customers encounter intermittent login timeouts."
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "invoice-conflicting-records",
+      "name": "Controlled · conflicting policy records",
+      "variationKind": "conflicting-records",
+      "agentId": "invoice-reviewer",
+      "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "stopped",
+      "orderedToolTrace": [
+        "finance.inspect_invoice",
+        "finance.lookup_policy"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": {
+        "condition": "conflictingEvidence",
+        "action": "escalate",
+        "callId": "call_0002",
+        "toolId": "finance.lookup_policy",
+        "sourceError": "CONFLICTING_RECORDS"
+      },
+      "error": {
+        "code": "AGENT_ESCALATION_REQUIRED",
+        "message": "A trusted stop rule requires escalation after this tool failure.",
+        "condition": "conflictingEvidence"
+      },
+      "output": null,
+      "evidence": [],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "invoice-reviewer",
+        "businessOutcomeVerified": false,
+        "status": "unknown",
+        "checks": [],
+        "reason": "A completed typed result is required before outcome validation."
+      },
+      "state": {
+        "id": "agent_run_6b3d909d6c5841428123ab3b40230517",
+        "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+        "status": "stopped",
+        "createdAt": 1790335542.903519,
+        "input": {
+          "invoiceId": "INV-CONFLICTING"
+        },
+        "facts": {
+          "call_0001": {
+            "invoiceId": "INV-CONFLICTING",
+            "supplier": "Example Office Supply",
+            "amount": 820.0,
+            "currency": "USD-CONFLICTING",
+            "purchaseOrder": "PO-410",
+            "variancePercent": 0.0,
+            "supplierApproved": true,
+            "fixture": true
+          },
+          "call_0002": {
+            "error": {
+              "code": "CONFLICTING_RECORDS",
+              "message": "Two controlled policy records disagree for this invoice currency.",
+              "retryable": false,
+              "condition": "conflictingEvidence"
+            }
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "finance.inspect_invoice",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "db92fbdd770ab202b4673632a4bfadbade08a924a3c68e9dfc921ad2404c3912",
+            "resultHash": "0e81cf8f8e7041e20da15e856062968df71d152280d59810913482e09f64e081"
+          },
+          "call_0002": {
+            "toolId": "finance.lookup_policy",
+            "toolVersion": "1.0.0",
+            "status": "failed",
+            "actionHash": "6fa0db31e31cb79f4a817f0b52401be1fd6f553ef5dde2477c5e0a3989759652",
+            "resultHash": "8c8b0a6626a85001cc5cb1d050f6a96956777abd4ce029ca139b3b3861e75cbd"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect invoice facts before selecting its disposition.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_6b3d909d6c5841428123ab3b40230517",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.inspect_invoice",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "invoiceId": "INV-CONFLICTING"
+              },
+              "payloadHash": "b79f2d3bba19fc9c2ad3fef9d035ce0d53c1f79f242ccda6a77557f5b423a032",
+              "operationKey": "adaptive:agent_run_6b3d909d6c5841428123ab3b40230517:call_0001",
+              "actionTarget": {
+                "toolId": "finance.inspect_invoice",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.inspect_invoice",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "db92fbdd770ab202b4673632a4bfadbade08a924a3c68e9dfc921ad2404c3912"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "finance.inspect_invoice",
+            "actionHash": "db92fbdd770ab202b4673632a4bfadbade08a924a3c68e9dfc921ad2404c3912",
+            "result": {
+              "invoiceId": "INV-CONFLICTING",
+              "supplier": "Example Office Supply",
+              "amount": 820.0,
+              "currency": "USD-CONFLICTING",
+              "purchaseOrder": "PO-410",
+              "variancePercent": 0.0,
+              "supplierApproved": true,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Retrieve the policy applicable to the observed invoice currency.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_6b3d909d6c5841428123ab3b40230517",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.lookup_policy",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "currency": "USD-CONFLICTING"
+              },
+              "payloadHash": "b65ea2be1c8bb52710d4f5d033dc647bf62d89abc02988970f2879ded6cdb7c5",
+              "operationKey": "adaptive:agent_run_6b3d909d6c5841428123ab3b40230517:call_0002",
+              "actionTarget": {
+                "toolId": "finance.lookup_policy",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.lookup_policy",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "0e81cf8f8e7041e20da15e856062968df71d152280d59810913482e09f64e081"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "6fa0db31e31cb79f4a817f0b52401be1fd6f553ef5dde2477c5e0a3989759652"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.failed",
+            "callId": "call_0002",
+            "toolId": "finance.lookup_policy",
+            "error": {
+              "code": "CONFLICTING_RECORDS",
+              "message": "Two controlled policy records disagree for this invoice currency.",
+              "retryable": false,
+              "condition": "conflictingEvidence"
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "boundary.applied",
+            "condition": "conflictingEvidence",
+            "action": "escalate",
+            "callId": "call_0002",
+            "toolId": "finance.lookup_policy",
+            "sourceError": "CONFLICTING_RECORDS"
+          },
+          {
+            "sequence": 8,
+            "type": "agent.escalated",
+            "code": "AGENT_ESCALATION_REQUIRED",
+            "message": "A trusted stop rule requires escalation after this tool failure.",
+            "condition": "conflictingEvidence"
+          }
+        ],
+        "counters": {
+          "turns": 2,
+          "modelCalls": 2,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 2,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": null,
+        "evidence": [],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": {
+          "condition": "conflictingEvidence",
+          "action": "escalate",
+          "callId": "call_0002",
+          "toolId": "finance.lookup_policy",
+          "sourceError": "CONFLICTING_RECORDS"
+        },
+        "provider": "scripted-fixture",
+        "error": {
+          "code": "AGENT_ESCALATION_REQUIRED",
+          "message": "A trusted stop rule requires escalation after this tool failure.",
+          "condition": "conflictingEvidence"
+        }
+      }
+    },
+    {
+      "scenario": "access-denied-capability",
+      "name": "Controlled · denied entitlement capability",
+      "variationKind": "denied-capability",
+      "agentId": "access-coordinator",
+      "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "stopped",
+      "orderedToolTrace": [
+        "access.inspect_request",
+        "access.lookup_entitlements"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": {
+        "condition": "deniedCapability",
+        "action": "escalate",
+        "callId": "call_0002",
+        "toolId": "access.lookup_entitlements",
+        "sourceError": "CAPABILITY_DENIED"
+      },
+      "error": {
+        "code": "AGENT_ESCALATION_REQUIRED",
+        "message": "A trusted stop rule requires escalation after this tool failure.",
+        "condition": "deniedCapability"
+      },
+      "output": null,
+      "evidence": [],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "access-coordinator",
+        "businessOutcomeVerified": false,
+        "status": "unknown",
+        "checks": [],
+        "reason": "A completed typed result is required before outcome validation."
+      },
+      "state": {
+        "id": "agent_run_0b45c2e894614be69841b721b72b7f3e",
+        "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+        "status": "stopped",
+        "createdAt": 1790335542.906687,
+        "input": {
+          "requestId": "AR-DENIED"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "AR-DENIED",
+            "userId": "fixture-user-14",
+            "resource": "Restricted workspace",
+            "requestedRole": "viewer",
+            "fixture": true
+          },
+          "call_0002": {
+            "error": {
+              "code": "CAPABILITY_DENIED",
+              "message": "The controlled fixture principal cannot inspect this restricted entitlement.",
+              "retryable": false,
+              "condition": "deniedCapability"
+            }
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "access.inspect_request",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "eb1ccb4c40c09f4d3cc8d8e3b9f242202bb1fad1f27e8630d7c9658de80ada41",
+            "resultHash": "5a858bbb3967a5fef70c9b3aa0a6185a2ef6a2d57666e3930e33d8c8f34f3361"
+          },
+          "call_0002": {
+            "toolId": "access.lookup_entitlements",
+            "toolVersion": "1.0.0",
+            "status": "failed",
+            "actionHash": "14f6b9dfa997f0f1d49f4c56c67a68fe71b5788795ac99f8f7bd3343f6d61ebd",
+            "resultHash": "b1bd4e518bd40a2672706eacf59e4a8f567a0ca400d24d5c8f237efb5b2a2996"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the requested entitlement first.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_0b45c2e894614be69841b721b72b7f3e",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.inspect_request",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "AR-DENIED"
+              },
+              "payloadHash": "280e463a1e01428a54319dfd3834d1eacd8ca337a96cf3d16f11eb0275de8cc4",
+              "operationKey": "adaptive:agent_run_0b45c2e894614be69841b721b72b7f3e:call_0001",
+              "actionTarget": {
+                "toolId": "access.inspect_request",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.inspect_request",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "eb1ccb4c40c09f4d3cc8d8e3b9f242202bb1fad1f27e8630d7c9658de80ada41"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "access.inspect_request",
+            "actionHash": "eb1ccb4c40c09f4d3cc8d8e3b9f242202bb1fad1f27e8630d7c9658de80ada41",
+            "result": {
+              "requestId": "AR-DENIED",
+              "userId": "fixture-user-14",
+              "resource": "Restricted workspace",
+              "requestedRole": "viewer",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Check existing access, role availability and approval evidence.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_0b45c2e894614be69841b721b72b7f3e",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.lookup_entitlements",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "userId": "fixture-user-14",
+                "resource": "Restricted workspace",
+                "requestedRole": "viewer"
+              },
+              "payloadHash": "0877c597211235b6d1d76ac9804b5390b093125d044e0ba4ed61a83012fd3e1c",
+              "operationKey": "adaptive:agent_run_0b45c2e894614be69841b721b72b7f3e:call_0002",
+              "actionTarget": {
+                "toolId": "access.lookup_entitlements",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.lookup_entitlements",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "5a858bbb3967a5fef70c9b3aa0a6185a2ef6a2d57666e3930e33d8c8f34f3361"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "14f6b9dfa997f0f1d49f4c56c67a68fe71b5788795ac99f8f7bd3343f6d61ebd"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.failed",
+            "callId": "call_0002",
+            "toolId": "access.lookup_entitlements",
+            "error": {
+              "code": "CAPABILITY_DENIED",
+              "message": "The controlled fixture principal cannot inspect this restricted entitlement.",
+              "retryable": false,
+              "condition": "deniedCapability"
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "boundary.applied",
+            "condition": "deniedCapability",
+            "action": "escalate",
+            "callId": "call_0002",
+            "toolId": "access.lookup_entitlements",
+            "sourceError": "CAPABILITY_DENIED"
+          },
+          {
+            "sequence": 8,
+            "type": "agent.escalated",
+            "code": "AGENT_ESCALATION_REQUIRED",
+            "message": "A trusted stop rule requires escalation after this tool failure.",
+            "condition": "deniedCapability"
+          }
+        ],
+        "counters": {
+          "turns": 2,
+          "modelCalls": 2,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 2,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": null,
+        "evidence": [],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": {
+          "condition": "deniedCapability",
+          "action": "escalate",
+          "callId": "call_0002",
+          "toolId": "access.lookup_entitlements",
+          "sourceError": "CAPABILITY_DENIED"
+        },
+        "provider": "scripted-fixture",
+        "error": {
+          "code": "AGENT_ESCALATION_REQUIRED",
+          "message": "A trusted stop rule requires escalation after this tool failure.",
+          "condition": "deniedCapability"
+        }
+      }
+    },
+    {
+      "scenario": "service-unavailable",
+      "name": "Controlled · runbook service unavailable",
+      "variationKind": "unavailable-service",
+      "agentId": "service-investigator",
+      "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "service.lookup",
+        "service.search_runbook"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": {
+        "condition": "unavailableService",
+        "action": "return_partial",
+        "callId": "call_0002",
+        "toolId": "service.search_runbook",
+        "sourceError": "SERVICE_UNAVAILABLE"
+      },
+      "error": null,
+      "output": {
+        "outcome": "service_unavailable",
+        "summary": "The request was observed, but the controlled runbook service is unavailable. No work item was prepared.",
+        "recordId": ""
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.requestId",
+          "value": "SR-SERVICE-UNAVAILABLE"
+        },
+        {
+          "source": "facts.call_0002.error.code",
+          "value": "SERVICE_UNAVAILABLE"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "service-investigator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "unavailable-service-partial",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The partial result reports the observed unavailable runbook service.",
+            "evidence": [
+              "facts.call_0001.requestId",
+              "facts.call_0002.error.code"
+            ]
+          },
+          {
+            "id": "unavailable-service-no-write",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "No work item is captured while required diagnostic evidence is unavailable.",
+            "evidence": [
+              "facts.call_0002.error.code"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_627d3640c923435ca9cae4a13c360544",
+        "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+        "status": "completed",
+        "createdAt": 1790335542.910322,
+        "input": {
+          "requestId": "SR-SERVICE-UNAVAILABLE"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "SR-SERVICE-UNAVAILABLE",
+            "service": "Customer portal",
+            "summary": "Controlled unavailable dependency during timeout diagnosis.",
+            "existingTicket": "",
+            "severity": "high",
+            "fixture": true
+          },
+          "call_0002": {
+            "error": {
+              "code": "SERVICE_UNAVAILABLE",
+              "message": "The controlled runbook service is unavailable for this demonstration.",
+              "retryable": true,
+              "condition": "unavailableService"
+            }
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "service.lookup",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "df30ee141bf03999f6cb05cee03ce4a247f16641d5a2cd211205bb916de0c58b",
+            "resultHash": "4ca5cb9d9f3c48820ab9fb614b0f327730aa34d088ebfb7e10d2f552915c9bfa"
+          },
+          "call_0002": {
+            "toolId": "service.search_runbook",
+            "toolVersion": "1.0.0",
+            "status": "failed",
+            "actionHash": "e70567a2b96314e7a49f428ca352cd2b970582b364f9e7c34f87735b8917eccd",
+            "resultHash": "51920b6bbb801c0d993b22e865b9ee4431fdeb7c57736fc47237618bf056b2a5"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the request before selecting the next action.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_627d3640c923435ca9cae4a13c360544",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.lookup",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "SR-SERVICE-UNAVAILABLE"
+              },
+              "payloadHash": "6f18858779c492d3b9523db07bc41587a1813914dc13ff4b81ed846ad2eb2365",
+              "operationKey": "adaptive:agent_run_627d3640c923435ca9cae4a13c360544:call_0001",
+              "actionTarget": {
+                "toolId": "service.lookup",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.lookup",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "df30ee141bf03999f6cb05cee03ce4a247f16641d5a2cd211205bb916de0c58b"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "service.lookup",
+            "actionHash": "df30ee141bf03999f6cb05cee03ce4a247f16641d5a2cd211205bb916de0c58b",
+            "result": {
+              "requestId": "SR-SERVICE-UNAVAILABLE",
+              "service": "Customer portal",
+              "summary": "Controlled unavailable dependency during timeout diagnosis.",
+              "existingTicket": "",
+              "severity": "high",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "The observed request has no linked work item; retrieve relevant diagnostics before preparing one.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_627d3640c923435ca9cae4a13c360544",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.search_runbook",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "service": "Customer portal",
+                "symptom": "Controlled unavailable dependency during timeout diagnosis."
+              },
+              "payloadHash": "3ffe18bf10bea61e77cbb5156e4269ff2ab04e1d599e7dc9be86b84cfef95b3c",
+              "operationKey": "adaptive:agent_run_627d3640c923435ca9cae4a13c360544:call_0002",
+              "actionTarget": {
+                "toolId": "service.search_runbook",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.search_runbook",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "4ca5cb9d9f3c48820ab9fb614b0f327730aa34d088ebfb7e10d2f552915c9bfa"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "e70567a2b96314e7a49f428ca352cd2b970582b364f9e7c34f87735b8917eccd"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.failed",
+            "callId": "call_0002",
+            "toolId": "service.search_runbook",
+            "error": {
+              "code": "SERVICE_UNAVAILABLE",
+              "message": "The controlled runbook service is unavailable for this demonstration.",
+              "retryable": true,
+              "condition": "unavailableService"
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "boundary.applied",
+            "condition": "unavailableService",
+            "action": "return_partial",
+            "callId": "call_0002",
+            "toolId": "service.search_runbook",
+            "sourceError": "SERVICE_UNAVAILABLE"
+          },
+          {
+            "sequence": 8,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 9,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "service_unavailable",
+              "summary": "The request was observed, but the controlled runbook service is unavailable. No work item was prepared.",
+              "recordId": ""
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.requestId",
+                "value": "SR-SERVICE-UNAVAILABLE"
+              },
+              {
+                "source": "facts.call_0002.error.code",
+                "value": "SERVICE_UNAVAILABLE"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 3,
+          "modelCalls": 3,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 2,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "service_unavailable",
+          "summary": "The request was observed, but the controlled runbook service is unavailable. No work item was prepared.",
+          "recordId": ""
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.requestId",
+            "value": "SR-SERVICE-UNAVAILABLE"
+          },
+          {
+            "source": "facts.call_0002.error.code",
+            "value": "SERVICE_UNAVAILABLE"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": {
+          "condition": "unavailableService",
+          "action": "return_partial",
+          "callId": "call_0002",
+          "toolId": "service.search_runbook",
+          "sourceError": "SERVICE_UNAVAILABLE"
+        },
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "access-unavailable-capability",
+      "name": "Controlled · requested role unavailable",
+      "variationKind": "unavailable-capability",
+      "agentId": "access-coordinator",
+      "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "access.inspect_request",
+        "access.lookup_entitlements"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "capability_gap",
+        "summary": "The observed role is unavailable. No grant can be prepared.",
+        "recordId": ""
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0002.roleAvailable",
+          "value": false
+        },
+        {
+          "source": "facts.call_0001.requestedRole",
+          "value": "auditor"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "access-coordinator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "unavailable-role",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "An unavailable role is reported without a grant proposal.",
+            "evidence": [
+              "facts.call_0002.roleAvailable"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_5fc750bf5bf84e2c882f3b2fc4d8e9a6",
+        "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+        "status": "completed",
+        "createdAt": 1790335542.913053,
+        "input": {
+          "requestId": "AR-UNAVAILABLE"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "AR-UNAVAILABLE",
+            "userId": "fixture-user-14",
+            "resource": "Analytics workspace",
+            "requestedRole": "auditor",
+            "fixture": true
+          },
+          "call_0002": {
+            "currentRole": "none",
+            "risk": "standard",
+            "managerApprovalOnFile": false,
+            "roleAvailable": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "access.inspect_request",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "519f21f958a1162211fbefa898547850ac4241ca793160cfa84c29bec76c8379",
+            "resultHash": "1687a2a15999d46800f5aa65e9859446932fb50f3b3fde8d3342eb8eca67eac4"
+          },
+          "call_0002": {
+            "toolId": "access.lookup_entitlements",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "cf64c802396c81259b92d6b3bbb9823af6b629009cd2acb08605108fe942b4b4",
+            "resultHash": "e081d3c44aeb571c21bbc90ec7285da8b23e6761f26b0fb99c643578568993fa"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the requested entitlement first.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_5fc750bf5bf84e2c882f3b2fc4d8e9a6",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.inspect_request",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "AR-UNAVAILABLE"
+              },
+              "payloadHash": "8291655805093be0432f9666c3dd7b371f6870879e496d103f017650d7764488",
+              "operationKey": "adaptive:agent_run_5fc750bf5bf84e2c882f3b2fc4d8e9a6:call_0001",
+              "actionTarget": {
+                "toolId": "access.inspect_request",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.inspect_request",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "519f21f958a1162211fbefa898547850ac4241ca793160cfa84c29bec76c8379"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "access.inspect_request",
+            "actionHash": "519f21f958a1162211fbefa898547850ac4241ca793160cfa84c29bec76c8379",
+            "result": {
+              "requestId": "AR-UNAVAILABLE",
+              "userId": "fixture-user-14",
+              "resource": "Analytics workspace",
+              "requestedRole": "auditor",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Check existing access, role availability and approval evidence.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_5fc750bf5bf84e2c882f3b2fc4d8e9a6",
+              "agentHash": "d7274af2b5d3586b325ff686921bc6d4c8781b5faca1e078215a9da6dc66b0b8",
+              "toolId": "access.lookup_entitlements",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "userId": "fixture-user-14",
+                "resource": "Analytics workspace",
+                "requestedRole": "auditor"
+              },
+              "payloadHash": "7919a6ca5e1dde42a9a0620455436a0b5cc396b2e8e6c8b51f700121fbc1e6ab",
+              "operationKey": "adaptive:agent_run_5fc750bf5bf84e2c882f3b2fc4d8e9a6:call_0002",
+              "actionTarget": {
+                "toolId": "access.lookup_entitlements",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.access",
+                  "adapterVersion": "1.0.0",
+                  "operation": "access.lookup_entitlements",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:access",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:access-coordinator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "1687a2a15999d46800f5aa65e9859446932fb50f3b3fde8d3342eb8eca67eac4"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "cf64c802396c81259b92d6b3bbb9823af6b629009cd2acb08605108fe942b4b4"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "access.lookup_entitlements",
+            "actionHash": "cf64c802396c81259b92d6b3bbb9823af6b629009cd2acb08605108fe942b4b4",
+            "result": {
+              "currentRole": "none",
+              "risk": "standard",
+              "managerApprovalOnFile": false,
+              "roleAvailable": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "capability_gap",
+              "summary": "The observed role is unavailable. No grant can be prepared.",
+              "recordId": ""
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0002.roleAvailable",
+                "value": false
+              },
+              {
+                "source": "facts.call_0001.requestedRole",
+                "value": "auditor"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 3,
+          "modelCalls": 3,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 2,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "capability_gap",
+          "summary": "The observed role is unavailable. No grant can be prepared.",
+          "recordId": ""
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0002.roleAvailable",
+            "value": false
+          },
+          {
+            "source": "facts.call_0001.requestedRole",
+            "value": "auditor"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "service-duplicate-operation",
+      "name": "Controlled · duplicate operation replay",
+      "variationKind": "duplicate-operation",
+      "agentId": "service-investigator",
+      "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "completed",
+      "orderedToolTrace": [
+        "service.lookup",
+        "service.search_runbook",
+        "service.create_ticket"
+      ],
+      "localEffectCount": 1,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 2,
+      "duplicateOperationPrevented": true,
+      "clarificationCount": 0,
+      "boundaryOutcome": null,
+      "error": null,
+      "output": {
+        "outcome": "work_item_captured",
+        "summary": "A work item was captured locally with its runbook reference. No external Jira ticket was created.",
+        "recordId": "LOCAL-0A394EE4FE"
+      },
+      "evidence": [
+        {
+          "source": "facts.call_0001.requestId",
+          "value": "SR-NEW"
+        },
+        {
+          "source": "facts.call_0002.articleId",
+          "value": "KB-LOGIN-07"
+        },
+        {
+          "source": "facts.call_0003.recordId",
+          "value": "LOCAL-0A394EE4FE"
+        }
+      ],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "service-investigator",
+        "businessOutcomeVerified": true,
+        "status": "satisfied",
+        "checks": [
+          {
+            "id": "runbook-linked",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The work item is supported by a runbook observation.",
+            "evidence": [
+              "facts.call_0002.articleId"
+            ]
+          },
+          {
+            "id": "receipt-matches",
+            "status": "satisfied",
+            "kind": "trusted-fixture-comparison",
+            "statement": "The returned record identity matches the captured receipt.",
+            "evidence": [
+              "facts.call_0003.recordId"
+            ]
+          }
+        ],
+        "reason": "All registered fixture comparisons passed."
+      },
+      "state": {
+        "id": "agent_run_cdbc0bf4d8464a2889af5d8fcf529e49",
+        "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+        "status": "completed",
+        "createdAt": 1790335542.916418,
+        "input": {
+          "requestId": "SR-NEW"
+        },
+        "facts": {
+          "call_0001": {
+            "requestId": "SR-NEW",
+            "service": "Customer portal",
+            "summary": "Customers encounter intermittent login timeouts.",
+            "existingTicket": "",
+            "severity": "high",
+            "fixture": true
+          },
+          "call_0002": {
+            "matched": true,
+            "articleId": "KB-LOGIN-07",
+            "recommendedAction": "Investigate the identity-provider connection pool.",
+            "fixture": true
+          },
+          "call_0003": {
+            "recordId": "LOCAL-0A394EE4FE",
+            "status": "work_item_captured",
+            "capturedLocally": true,
+            "externalWrite": false,
+            "fixture": true
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "service.lookup",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "a67cd237ad46ee7f4891bb8e121d3cb5f3679ca6d13bfe45e4dad4cd2c7db004",
+            "resultHash": "6a6b62b67135ebdcf8a65b0d968e6a8942ec587f2f77868795cce1d3f9ceecac"
+          },
+          "call_0002": {
+            "toolId": "service.search_runbook",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "0a6ef7289fcbb42239ad02f68af7d23c8e61d7c42ee99112c2bccd4ca5a5c053",
+            "resultHash": "db5fd22234ef3f0c7f7ba81efcb33f7eaa419bf039188809fa047df77c71308d"
+          },
+          "call_0003": {
+            "toolId": "service.create_ticket",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "0e88e518567a953043a845892d1facbf4c217054f20f2622cdffc0655bd4d288",
+            "resultHash": "f2c7b29d87a8b1d6ac9773bbe50eb9a5f88d54c93fd617bbdc3428b93163150b"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect the request before selecting the next action.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_cdbc0bf4d8464a2889af5d8fcf529e49",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.lookup",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "requestId": "SR-NEW"
+              },
+              "payloadHash": "121052513b45249150827c0d4e461f6b52f678bbda84b8aaaa9006a4168de5bf",
+              "operationKey": "adaptive:agent_run_cdbc0bf4d8464a2889af5d8fcf529e49:call_0001",
+              "actionTarget": {
+                "toolId": "service.lookup",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.lookup",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "a67cd237ad46ee7f4891bb8e121d3cb5f3679ca6d13bfe45e4dad4cd2c7db004"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "service.lookup",
+            "actionHash": "a67cd237ad46ee7f4891bb8e121d3cb5f3679ca6d13bfe45e4dad4cd2c7db004",
+            "result": {
+              "requestId": "SR-NEW",
+              "service": "Customer portal",
+              "summary": "Customers encounter intermittent login timeouts.",
+              "existingTicket": "",
+              "severity": "high",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "The observed request has no linked work item; retrieve relevant diagnostics before preparing one.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_cdbc0bf4d8464a2889af5d8fcf529e49",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.search_runbook",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "service": "Customer portal",
+                "symptom": "Customers encounter intermittent login timeouts."
+              },
+              "payloadHash": "1a5eed9bb3fb3bd0debfb1f869250c0b75767dd7c5406cc580f4d372e5bf450f",
+              "operationKey": "adaptive:agent_run_cdbc0bf4d8464a2889af5d8fcf529e49:call_0002",
+              "actionTarget": {
+                "toolId": "service.search_runbook",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.search_runbook",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "6a6b62b67135ebdcf8a65b0d968e6a8942ec587f2f77868795cce1d3f9ceecac"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "0a6ef7289fcbb42239ad02f68af7d23c8e61d7c42ee99112c2bccd4ca5a5c053"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.observed",
+            "callId": "call_0002",
+            "toolId": "service.search_runbook",
+            "actionHash": "0a6ef7289fcbb42239ad02f68af7d23c8e61d7c42ee99112c2bccd4ca5a5c053",
+            "result": {
+              "matched": true,
+              "articleId": "KB-LOGIN-07",
+              "recommendedAction": "Investigate the identity-provider connection pool.",
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Prepare a new local work item from the observed request and runbook. Review the exact payload before capture.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 8,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0003",
+              "sessionId": "agent_run_cdbc0bf4d8464a2889af5d8fcf529e49",
+              "agentHash": "e39e8f8a698c09180d0099a1e52b84596f5da713e42746653518db65b729622b",
+              "toolId": "service.create_ticket",
+              "toolVersion": "1.0.0",
+              "effect": "write",
+              "arguments": {
+                "requestId": "SR-NEW",
+                "service": "Customer portal",
+                "summary": "Customers encounter intermittent login timeouts.",
+                "priority": "high",
+                "runbookReference": "KB-LOGIN-07"
+              },
+              "payloadHash": "f70d50af020a23fab13d11816f309f9064fe867f4d0ea3710120f02beefb5488",
+              "operationKey": "adaptive:agent_run_cdbc0bf4d8464a2889af5d8fcf529e49:call_0003",
+              "actionTarget": {
+                "toolId": "service.create_ticket",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.service",
+                  "adapterVersion": "1.0.0",
+                  "operation": "service.create_ticket",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": true,
+                "authorization": {
+                  "scope": "fixture:service",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:service-investigator"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001",
+                "facts.call_0002"
+              ],
+              "sourceVersions": {
+                "call_0001": "6a6b62b67135ebdcf8a65b0d968e6a8942ec587f2f77868795cce1d3f9ceecac",
+                "call_0002": "db5fd22234ef3f0c7f7ba81efcb33f7eaa419bf039188809fa047df77c71308d"
+              },
+              "reconciliation": {
+                "classification": "idempotent-local-capture",
+                "operationKey": "required",
+                "retry": "only-after-ledger-check",
+                "reconciliation": "read-local-effect-receipt"
+              },
+              "actionHash": "0e88e518567a953043a845892d1facbf4c217054f20f2622cdffc0655bd4d288"
+            }
+          },
+          {
+            "sequence": 9,
+            "type": "action.approved",
+            "approved": true,
+            "actorId": "local-fixture-test-harness",
+            "actionHash": "0e88e518567a953043a845892d1facbf4c217054f20f2622cdffc0655bd4d288"
+          },
+          {
+            "sequence": 10,
+            "type": "tool.observed",
+            "callId": "call_0003",
+            "toolId": "service.create_ticket",
+            "actionHash": "0e88e518567a953043a845892d1facbf4c217054f20f2622cdffc0655bd4d288",
+            "result": {
+              "recordId": "LOCAL-0A394EE4FE",
+              "status": "work_item_captured",
+              "capturedLocally": true,
+              "externalWrite": false,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 11,
+            "type": "model.decision",
+            "kind": "finish",
+            "reason": "Conclude using the recorded observations; local captures do not establish external effects.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 12,
+            "type": "agent.completed",
+            "output": {
+              "outcome": "work_item_captured",
+              "summary": "A work item was captured locally with its runbook reference. No external Jira ticket was created.",
+              "recordId": "LOCAL-0A394EE4FE"
+            },
+            "evidence": [
+              {
+                "source": "facts.call_0001.requestId",
+                "value": "SR-NEW"
+              },
+              {
+                "source": "facts.call_0002.articleId",
+                "value": "KB-LOGIN-07"
+              },
+              {
+                "source": "facts.call_0003.recordId",
+                "value": "LOCAL-0A394EE4FE"
+              }
+            ]
+          }
+        ],
+        "counters": {
+          "turns": 4,
+          "modelCalls": 4,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 3,
+          "writeCalls": 1
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": {
+          "outcome": "work_item_captured",
+          "summary": "A work item was captured locally with its runbook reference. No external Jira ticket was created.",
+          "recordId": "LOCAL-0A394EE4FE"
+        },
+        "evidence": [
+          {
+            "source": "facts.call_0001.requestId",
+            "value": "SR-NEW"
+          },
+          {
+            "source": "facts.call_0002.articleId",
+            "value": "KB-LOGIN-07"
+          },
+          {
+            "source": "facts.call_0003.recordId",
+            "value": "LOCAL-0A394EE4FE"
+          }
+        ],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": null,
+        "provider": "scripted-fixture",
+        "completionCheck": {
+          "outputSchemaValid": true,
+          "evidenceReferencesValid": true,
+          "requiredEvidenceToolsSatisfied": true,
+          "businessOutcomeVerified": false
+        }
+      }
+    },
+    {
+      "scenario": "invoice-changed-business-condition",
+      "name": "Controlled · policy changed during review",
+      "variationKind": "changed-business-condition",
+      "agentId": "invoice-reviewer",
+      "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+      "provider": "scripted-fixture",
+      "liveModelCalled": false,
+      "status": "stopped",
+      "orderedToolTrace": [
+        "finance.inspect_invoice",
+        "finance.lookup_policy"
+      ],
+      "localEffectCount": 0,
+      "externalEffectCount": 0,
+      "writeAttemptCount": 0,
+      "duplicateOperationPrevented": false,
+      "clarificationCount": 0,
+      "boundaryOutcome": {
+        "condition": "changedBusinessState",
+        "action": "escalate",
+        "callId": "call_0002",
+        "toolId": "finance.lookup_policy",
+        "sourceError": "BUSINESS_STATE_CHANGED"
+      },
+      "error": {
+        "code": "AGENT_ESCALATION_REQUIRED",
+        "message": "A trusted stop rule requires escalation after this tool failure.",
+        "condition": "changedBusinessState"
+      },
+      "output": null,
+      "evidence": [],
+      "outcomeValidation": {
+        "validatorId": "fixture-outcome-validator.v1",
+        "agentId": "invoice-reviewer",
+        "businessOutcomeVerified": false,
+        "status": "unknown",
+        "checks": [],
+        "reason": "A completed typed result is required before outcome validation."
+      },
+      "state": {
+        "id": "agent_run_d31404fe47504d12951532c997d50e5e",
+        "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+        "status": "stopped",
+        "createdAt": 1790335542.9198039,
+        "input": {
+          "invoiceId": "INV-CHANGED"
+        },
+        "facts": {
+          "call_0001": {
+            "invoiceId": "INV-CHANGED",
+            "supplier": "Example Office Supply",
+            "amount": 820.0,
+            "currency": "USD-CHANGED",
+            "purchaseOrder": "PO-410",
+            "variancePercent": 0.0,
+            "supplierApproved": true,
+            "fixture": true
+          },
+          "call_0002": {
+            "error": {
+              "code": "BUSINESS_STATE_CHANGED",
+              "message": "The controlled policy version changed during the review.",
+              "retryable": false,
+              "condition": "changedBusinessState"
+            }
+          }
+        },
+        "factSources": {
+          "call_0001": {
+            "toolId": "finance.inspect_invoice",
+            "toolVersion": "1.0.0",
+            "status": "succeeded",
+            "actionHash": "85a545971f323ec0ab948c4a8b7f938b433ae664fed2f85f31e90021562ef2ee",
+            "resultHash": "3d88f74177b692c07fe127205e87760819f005716fddfb05a7ed8ac688ef1160"
+          },
+          "call_0002": {
+            "toolId": "finance.lookup_policy",
+            "toolVersion": "1.0.0",
+            "status": "failed",
+            "actionHash": "c61a95aa405d6937a7dabc404e76310586db91238b0a7e06ae18706af97b8db0",
+            "resultHash": "e0993934c824fb317399b409afc22226ce65c8bfddb568a1fa3106dfe43d1000"
+          }
+        },
+        "events": [
+          {
+            "sequence": 1,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Inspect invoice facts before selecting its disposition.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 2,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0001",
+              "sessionId": "agent_run_d31404fe47504d12951532c997d50e5e",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.inspect_invoice",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "invoiceId": "INV-CHANGED"
+              },
+              "payloadHash": "fb3f47c2851d319463839bb3196345524b63ac371413d2941316d4438694ad79",
+              "operationKey": "adaptive:agent_run_d31404fe47504d12951532c997d50e5e:call_0001",
+              "actionTarget": {
+                "toolId": "finance.inspect_invoice",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.inspect_invoice",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [],
+              "sourceVersions": {},
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "85a545971f323ec0ab948c4a8b7f938b433ae664fed2f85f31e90021562ef2ee"
+            }
+          },
+          {
+            "sequence": 3,
+            "type": "tool.observed",
+            "callId": "call_0001",
+            "toolId": "finance.inspect_invoice",
+            "actionHash": "85a545971f323ec0ab948c4a8b7f938b433ae664fed2f85f31e90021562ef2ee",
+            "result": {
+              "invoiceId": "INV-CHANGED",
+              "supplier": "Example Office Supply",
+              "amount": 820.0,
+              "currency": "USD-CHANGED",
+              "purchaseOrder": "PO-410",
+              "variancePercent": 0.0,
+              "supplierApproved": true,
+              "fixture": true
+            }
+          },
+          {
+            "sequence": 4,
+            "type": "model.decision",
+            "kind": "call",
+            "reason": "Retrieve the policy applicable to the observed invoice currency.",
+            "provider": "scripted-fixture",
+            "usage": {}
+          },
+          {
+            "sequence": 5,
+            "type": "action.prepared",
+            "action": {
+              "id": "call_0002",
+              "sessionId": "agent_run_d31404fe47504d12951532c997d50e5e",
+              "agentHash": "6ee19d19f273d0599563267a97b941e9364bb513dba34def8841f3008ce0e82c",
+              "toolId": "finance.lookup_policy",
+              "toolVersion": "1.0.0",
+              "effect": "read",
+              "arguments": {
+                "currency": "USD-CHANGED"
+              },
+              "payloadHash": "2e6ee327f33142f1ce23e9e1627fd3a9b7cc8d015af96835a094333b218dc957",
+              "operationKey": "adaptive:agent_run_d31404fe47504d12951532c997d50e5e:call_0002",
+              "actionTarget": {
+                "toolId": "finance.lookup_policy",
+                "toolVersion": "1.0.0",
+                "adapterBinding": {
+                  "adapterId": "local-fixture.finance",
+                  "adapterVersion": "1.0.0",
+                  "operation": "finance.lookup_policy",
+                  "transport": "in-process"
+                }
+              },
+              "policy": {
+                "approvalRequired": false,
+                "authorization": {
+                  "scope": "fixture:finance",
+                  "principal": "bounded-agent-session",
+                  "credentials": "none"
+                },
+                "policyRefs": [
+                  "fixture-policy:invoice-reviewer"
+                ]
+              },
+              "evidenceRefs": [
+                "facts.call_0001"
+              ],
+              "sourceVersions": {
+                "call_0001": "3d88f74177b692c07fe127205e87760819f005716fddfb05a7ed8ac688ef1160"
+              },
+              "reconciliation": {
+                "classification": "safe-read",
+                "retry": "bounded-by-session-policy",
+                "reconciliation": "not-required"
+              },
+              "actionHash": "c61a95aa405d6937a7dabc404e76310586db91238b0a7e06ae18706af97b8db0"
+            }
+          },
+          {
+            "sequence": 6,
+            "type": "tool.failed",
+            "callId": "call_0002",
+            "toolId": "finance.lookup_policy",
+            "error": {
+              "code": "BUSINESS_STATE_CHANGED",
+              "message": "The controlled policy version changed during the review.",
+              "retryable": false,
+              "condition": "changedBusinessState"
+            }
+          },
+          {
+            "sequence": 7,
+            "type": "boundary.applied",
+            "condition": "changedBusinessState",
+            "action": "escalate",
+            "callId": "call_0002",
+            "toolId": "finance.lookup_policy",
+            "sourceError": "BUSINESS_STATE_CHANGED"
+          },
+          {
+            "sequence": 8,
+            "type": "agent.escalated",
+            "code": "AGENT_ESCALATION_REQUIRED",
+            "message": "A trusted stop rule requires escalation after this tool failure.",
+            "condition": "changedBusinessState"
+          }
+        ],
+        "counters": {
+          "turns": 2,
+          "modelCalls": 2,
+          "modelTokens": 0,
+          "estimatedCostMicros": 0,
+          "toolCalls": 2,
+          "writeCalls": 0
+        },
+        "usage": {
+          "costKnown": true,
+          "providerResponses": []
+        },
+        "pendingAction": null,
+        "approval": null,
+        "output": null,
+        "evidence": [],
+        "question": null,
+        "requestedFields": [],
+        "boundaryOutcome": {
+          "condition": "changedBusinessState",
+          "action": "escalate",
+          "callId": "call_0002",
+          "toolId": "finance.lookup_policy",
+          "sourceError": "BUSINESS_STATE_CHANGED"
+        },
+        "provider": "scripted-fixture",
+        "error": {
+          "code": "AGENT_ESCALATION_REQUIRED",
+          "message": "A trusted stop rule requires escalation after this tool failure.",
+          "condition": "changedBusinessState"
+        }
+      }
+    }
+  ]
+}
