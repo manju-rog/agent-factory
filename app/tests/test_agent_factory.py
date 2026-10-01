@@ -454,9 +454,73 @@ class AgentFactoryTests(unittest.TestCase):
         state = af.apply_decision(compiled, state, {
             "kind": "call", "toolId": "record.write",
             "arguments": {"recordId": "R-1", "value": 3},
+            "evidence": ["facts.call_0001.version"],
         })
         self.assertEqual({"call_0001": read_hash}, state["pendingAction"]["sourceVersions"])
         self.assertNotIn("call_0002", state["pendingAction"]["sourceVersions"])
+
+    def test_write_evidence_must_name_an_existing_exact_observation(self):
+        registry = [
+            capability("record.read", "Read one mutable record.", "read",
+                       {"recordId": TEXT}, {"version": NUMBER}),
+            capability("record.write", "Write one reviewed record change.", "write",
+                       {"recordId": TEXT, "value": NUMBER}, {"receiptId": TEXT}),
+        ]
+        definition = {
+            "id": "evidence-bound-write-agent", "version": 1,
+            "name": "Evidence-bound write agent",
+            "mission": "Read one record and prepare an evidence-bound update.",
+            "inputSchema": obj({"recordId": TEXT}),
+            "outputSchema": obj({"summary": TEXT}),
+            "contextFields": ["input.recordId"],
+            "allowedTools": [item["id"] for item in registry],
+            "limits": {"maxTurns": 4, "maxToolCalls": 3, "maxWriteCalls": 1},
+        }
+        compiled = af.compile_agent(definition, registry)
+        state = af.create_state(compiled, {"recordId": "R-1"})
+        state = af.apply_decision(compiled, state, {
+            "kind": "call", "toolId": "record.read",
+            "arguments": {"recordId": "R-1"},
+        })
+        state = af.record_tool_result(compiled, state, {"version": 1})
+
+        self.assert_error(
+            "MISSING_REFERENCE", af.apply_decision, compiled, state,
+            {
+                "kind": "call", "toolId": "record.write",
+                "arguments": {"recordId": "R-1", "value": 2},
+                "evidence": ["facts.call_9999.version"],
+            },
+        )
+        prepared = af.apply_decision(
+            compiled, state,
+            {
+                "kind": "call", "toolId": "record.write",
+                "arguments": {"recordId": "R-1", "value": 2},
+                "evidence": ["facts.call_0001.version"],
+            },
+        )
+        changed = copy.deepcopy(prepared)
+        changed["pendingAction"]["evidenceRefs"] = ["facts.call_9999.version"]
+        self.assert_error(
+            "ACTION_CHANGED", af.approve_action, compiled, changed, True,
+            "reviewer", prepared["pendingAction"]["actionHash"],
+        )
+        rehashed = copy.deepcopy(prepared)
+        rehashed["pendingAction"]["evidenceRefs"] = [
+            "facts.call_9999.version"
+        ]
+        rehashed["pendingAction"]["sourceVersions"] = {}
+        rehashed["pendingAction"]["actionHash"] = af._action_hash(
+            rehashed["pendingAction"]
+        )
+        rehashed = af.approve_action(
+            compiled, rehashed, True, "reviewer",
+            rehashed["pendingAction"]["actionHash"],
+        )
+        self.assert_error(
+            "ACTION_CHANGED", af.executable_action, compiled, rehashed
+        )
 
     def test_missing_input_is_requested_and_supplied_only_in_declared_scope(self):
         state = af.apply_decision(self.compiled, self.state, {"kind": "ask", "question": "What did you observe?", "fields": ["input.clarification"]})

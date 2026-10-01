@@ -51,9 +51,12 @@ class DemoWorkflowTests(unittest.TestCase):
             "preparedActions": references,
         }, REVIEWER)
 
-    def test_fresh_workspace_contains_five_published_complex_demos(self):
+    def test_fresh_workspace_contains_published_complex_demos_and_flagship(self):
         templates = {item["id"]: item for item in self.store.all("templates")}
-        self.assertEqual({"customer-resolution", *DEMO_IDS}, set(templates))
+        self.assertEqual(
+            {"customer-resolution", "atlas-checkout-incident-command", *DEMO_IDS},
+            set(templates),
+        )
         for spec in DEMO_WORKFLOWS:
             with self.subTest(template=spec["id"]):
                 template = templates[spec["id"]]

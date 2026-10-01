@@ -440,7 +440,7 @@ def model_messages(compiled, state):
               "If information is missing, ask a precise question with exact permitted input fields. "
               "Finish only with output matching outputSchema and evidence listing exact existing input/facts paths. "
               "Never claim a tool ran before observing its result. Rationale is brief user-facing justification, not hidden reasoning. "
-              "Decisions: {kind:'call',toolId,arguments,reason?}; {kind:'ask',question,fields:[input paths],reason?}; "
+              "Decisions: {kind:'call',toolId,arguments,evidence?:[exact fact paths],reason?}; {kind:'ask',question,fields:[input paths],reason?}; "
               "{kind:'finish',output,evidence:[exact references],reason?}. Return strict JSON only.")
     remaining = {
         "modelCalls": max(0, spec["limits"]["maxTurns"] - state["counters"]["turns"]),
@@ -482,6 +482,48 @@ def _resolve_values(state, value, depth=0):
     if isinstance(value, list):
         return [_resolve_values(state, child, depth + 1) for child in value]
     return copy.deepcopy(value)
+
+
+def _collect_fact_references(value, references=None, depth=0):
+    """Collect exact observed-fact references without trusting resolved values."""
+    if references is None:
+        references = set()
+    if depth > 12:
+        raise AgentError("INVALID_REFERENCE", "Argument nesting is too deep.")
+    if isinstance(value, dict):
+        if set(value) == {"$ref"} and isinstance(value.get("$ref"), str):
+            if value["$ref"].startswith("facts."):
+                references.add(value["$ref"])
+            return references
+        for child in value.values():
+            _collect_fact_references(child, references, depth + 1)
+    elif isinstance(value, list):
+        for child in value:
+            _collect_fact_references(child, references, depth + 1)
+    return references
+
+
+def _source_versions(compiled, state, evidence_refs):
+    call_ids = {
+        reference.split(".", 2)[1]
+        for reference in evidence_refs
+        if isinstance(reference, str) and reference.startswith("facts.call_")
+    }
+    return {
+        ident: metadata.get("resultHash")
+        for ident, metadata in state.get("factSources", {}).items()
+        if (
+            ident in call_ids
+            and isinstance(metadata, dict)
+            and metadata.get("status") == "succeeded"
+            and isinstance(metadata.get("resultHash"), str)
+            and any(
+                candidate.get("id") == metadata.get("toolId")
+                and candidate.get("effect") == "read"
+                for candidate in compiled["tools"]
+            )
+        )
+    }
 
 
 def _action_hash(action):
@@ -546,7 +588,7 @@ def apply_decision(compiled, state, decision, provider_label="configured-model",
     if not isinstance(decision, dict) or _size(decision) > compiled["spec"]["limits"]["maxOutputBytes"]:
         raise AgentError("MODEL_RESPONSE", "The model response exceeds the output budget or is not an object.")
     kind = decision.get("kind")
-    fields = {"call": {"kind", "toolId", "arguments", "reason"}, "ask": {"kind", "question", "fields", "reason"},
+    fields = {"call": {"kind", "toolId", "arguments", "evidence", "reason"}, "ask": {"kind", "question", "fields", "reason"},
               "finish": {"kind", "output", "evidence", "reason"}}
     if not isinstance(kind, str) or kind not in fields or set(decision) - fields[kind]:
         raise AgentError("MODEL_RESPONSE", "The decision has an unsupported kind or fields.")
@@ -588,6 +630,16 @@ def apply_decision(compiled, state, decision, provider_label="configured-model",
         if not isinstance(raw_args, dict):
             raise AgentError("MODEL_RESPONSE", "Tool arguments must be an object.")
         raw_args = copy.deepcopy(raw_args)
+        evidence_refs = decision.get("evidence", [])
+        if (not isinstance(evidence_refs, list) or len(evidence_refs) > 100
+                or len(evidence_refs) != len(set(evidence_refs))
+                or any(not isinstance(reference, str) for reference in evidence_refs)):
+            raise AgentError("MODEL_RESPONSE", "Action evidence must be a bounded list of unique exact references.")
+        for reference in evidence_refs:
+            _resolve_reference(state, reference)
+        evidence_refs = sorted(
+            set(evidence_refs) | _collect_fact_references(raw_args)
+        )
         for arg, reference in tool.get("boundArguments", {}).items():
             if arg in raw_args and raw_args[arg] != {"$ref": reference}:
                 raise AgentError("BOUND_ARGUMENT", "The model cannot override a trusted resource or recipient binding.", {"argument": arg})
@@ -618,25 +670,11 @@ def apply_decision(compiled, state, decision, provider_label="configured-model",
                 "authorization": copy.deepcopy(tool.get("authorization", {})),
                 "policyRefs": copy.deepcopy(compiled["spec"].get("policyRefs", [])),
             },
-            "evidenceRefs": sorted(f"facts.{ident}" for ident in state.get("facts", {})),
-            # Only successful read observations are mutable business-state
-            # preconditions that the host can authoritatively re-read before a
-            # write. Prior write receipts remain evidence, but are not treated
-            # as if they were callable read contracts.
-            "sourceVersions": {
-                ident: metadata.get("resultHash")
-                for ident, metadata in state.get("factSources", {}).items()
-                if (
-                    isinstance(metadata, dict)
-                    and metadata.get("status") == "succeeded"
-                    and isinstance(metadata.get("resultHash"), str)
-                    and any(
-                        candidate.get("id") == metadata.get("toolId")
-                        and candidate.get("effect") == "read"
-                        for candidate in compiled["tools"]
-                    )
-                )
-            },
+            "evidenceRefs": evidence_refs,
+            # Recheck only the mutable reads this exact action cites. Rechecking
+            # every historical read makes a later write invalidate itself when
+            # an earlier approved write legitimately changed unrelated state.
+            "sourceVersions": _source_versions(compiled, state, evidence_refs),
             "reconciliation": copy.deepcopy(tool.get("idempotency", {})),
         }
         action["actionHash"] = _action_hash(action)
@@ -736,20 +774,20 @@ def executable_action(compiled, state):
     expected_policy = {"approvalRequired": tool["effect"] == "write",
                        "authorization": copy.deepcopy(tool.get("authorization", {})),
                        "policyRefs": copy.deepcopy(compiled["spec"].get("policyRefs", []))}
-    expected_versions = {
-        ident: metadata.get("resultHash")
-        for ident, metadata in state.get("factSources", {}).items()
-        if (
-            isinstance(metadata, dict)
-            and metadata.get("status") == "succeeded"
-            and isinstance(metadata.get("resultHash"), str)
-            and any(
-                candidate.get("id") == metadata.get("toolId")
-                and candidate.get("effect") == "read"
-                for candidate in compiled["tools"]
-            )
-        )
-    }
+    evidence_refs = action.get("evidenceRefs", [])
+    if (not isinstance(evidence_refs, list)
+            or any(not isinstance(reference, str) for reference in evidence_refs)):
+        raise AgentError("ACTION_CHANGED", "Prepared evidence references are invalid.")
+    for reference in evidence_refs:
+        try:
+            _resolve_reference(state, reference)
+        except AgentError as exc:
+            raise AgentError(
+                "ACTION_CHANGED",
+                "A prepared evidence reference no longer resolves to an observed fact.",
+                {"reference": reference},
+            ) from exc
+    expected_versions = _source_versions(compiled, state, evidence_refs)
     if (action.get("toolVersion") != str(tool.get("version", "1.0.0"))
             or action.get("payloadHash") != _hash(action.get("arguments"))
             or action.get("operationKey") != f"adaptive:{state['id']}:{action['id']}"

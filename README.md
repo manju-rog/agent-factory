@@ -2,26 +2,36 @@
 
 Axiom is a runnable local reference application for building governed business workflows with reusable, adaptive Goal Agents. It combines a visual workflow designer, typed node connections, exact-action approvals, durable agent sessions, behavior rehearsals, evidence tracking, and bounded external-service connections.
 
-This repository contains Axiom 2.0.0 with SQLite schema 11. It is a local development and demonstration system, not a production deployment.
+This repository contains Axiom 2.1.0 with SQLite schema 12. It is a local development and demonstration system, not a production deployment.
 
 ## Run locally
 
 Python 3.10 or newer is required. No mandatory package installation is needed.
 
 ```bash
-cd app
-python3 server.py --port 8765
+cd app && python3 server.py
 ```
 
 Then open [http://127.0.0.1:8765](http://127.0.0.1:8765).
 
 The server is intended for loopback development use. Do not expose the reference server directly to the public internet.
 
+## Atlas Checkout Simulation Lab
+
+Open **Simulation Lab** for the flagship adaptive-agent demonstration. It creates a stateful, SQLite-persisted local world for the fictional Atlas Checkout service and offers seven controlled evidence profiles: `fresh-incident`, `existing-incident`, `missing-owner`, `confluence-unavailable`, `slack-rate-limit`, `jira-lost-ack`, and `changed-flag-version`.
+
+The world, virtual clock, capability results, prepared actions, approvals, operation ledger, reconciliation, reset generations, and authoritative outcome checks are real local application behavior. Atlas Checkout and the provider-shaped Metrics, Service Catalog, Deployments, Jira, Confluence, Slack, and feature-flag systems are simulated in-process. Their receipts are explicitly marked simulated, and the sandbox enforces **no external network and zero external effects**.
+
+Writes still pause for approval of the exact prepared action. A lost Jira acknowledgement is reconciled by stable operation identity instead of blindly retried. A reset is refused while a bound workflow, agent session, or unresolved effect is active; a successful reset advances the world generation while preserving prior-generation audit history.
+
+See the [complete Simulation Lab guide](docs/SIMULATION_LAB.md) for the guided walkthrough, REST API, profile behavior, and safety boundaries.
+
 ## Start here
 
 - [Delivery, startup, verification, and feature status](START_HERE.md)
 - [Complete beginner's guide](AXIOM_BEGINNER_GUIDE.md)
 - [How Axiom's agentic intelligence works](AXIOM_AGENTIC_INTELLIGENCE_GUIDE.md)
+- [Atlas Checkout Simulation Lab](docs/SIMULATION_LAB.md)
 - [Application documentation](app/README.md)
 - [External integration guide](docs/EXTERNAL_INTEGRATIONS.md)
 - [Agent Factory architecture](factory/Agent_Factory_Paradigm.md)
@@ -30,6 +40,7 @@ The server is intended for loopback development use. Do not expose the reference
 ## Important boundaries
 
 - Bundled scripted fixtures demonstrate runtime behavior; they are not AI and do not prove live-model quality.
+- The Atlas Checkout sandbox is stateful and realistic by design, but every provider is local and simulated. It neither authenticates to nor changes a live Slack, Jira, Confluence, observability, deployment, or feature-flag system.
 - Slack, Jira Cloud, Confluence Cloud, and webhook support requires administrator-supplied credentials and live sandbox validation.
 - Corporate authentication, tenant isolation, managed secrets, complete OAuth, distributed workers, provider-specific reconciliation, production monitoring, retention controls, load testing, and failover validation remain production integration work.
 - Local runtime databases, browser-automation captures, caches, and environment files are intentionally excluded from version control.

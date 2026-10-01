@@ -1,18 +1,32 @@
 {
   "product": "Axiom",
   "scope": "local reference application",
-  "verified_on": "2026-09-25",
-  "app_version": "2.0.0",
-  "schema_version": 11,
+  "verified_on": "2026-10-01",
+  "app_version": "2.1.0",
+  "schema_version": 12,
   "builtin_contract_version": "1.3.0",
-  "python_tests": 287,
-  "verification_note": "The Axiom 2.0 discovery gate passed 287/287 tests in 34.162 seconds on 2026-09-25. No live Slack, Jira Cloud, Confluence Cloud, webhook receiver, MCP server, or arbitrary API tenant was used. The prior Axiom 1.9 235-test result and supplied factory source checkpoint's 113 tests are historical baselines. Live-model quality, production identity/tenancy, distributed load/failover, and formal accessibility certification remain unverified production gates.",
+  "python_tests": 322,
+  "verification_note": "The Axiom 2.1 discovery gate passed 322/322 tests in 71.386 seconds on 2026-10-01, including 16 focused Atlas Checkout Simulation Lab domain tests and integrated persistence, HTTP, workflow-child, approval, restart, reconciliation, reset, and capability-runtime coverage. The Simulation Lab is stateful and realistic but strictly local: all provider-shaped systems are simulated in-process with no external network and zero external effects. No live Slack, Jira Cloud, Confluence Cloud, webhook receiver, MCP server, observability, deployment, catalog, feature-flag, or arbitrary API tenant was used. Live-model quality, production identity/tenancy, distributed load/failover, and formal accessibility certification remain unverified production gates.",
   "machine_verification": {
     "current_release_gate": {
       "status": "passed",
+      "release": "2.1.0",
+      "verified_on": "2026-10-01",
+      "passed": 322,
+      "total": 322,
+      "seconds": 71.386
+    },
+    "simulation_lab_domain": {
+      "status": "passed",
+      "passed": 16,
+      "total": 16,
+      "scope": "Deterministic world, seven profiles, capability contracts, observation-conditioned decisions, faults, approval identity, idempotency, reconciliation, stale-state rejection, event integrity, and authoritative outcome validation"
+    },
+    "historical_axiom_2_0_full_python": {
       "passed": 287,
       "total": 287,
-      "seconds": 34.162
+      "seconds": 34.162,
+      "verified_on": "2026-09-25"
     },
     "historical_axiom_1_9_full_python": {
       "passed": 235,
@@ -56,6 +70,22 @@
     "json_validation": "passed"
   },
   "features": {
+    "atlas_checkout_simulation_lab": {
+      "status": "verified",
+      "evidence_or_limit": "Schema 12 persists isolated Atlas Checkout worlds, generation-aware event history and stable simulated operation records. The seven canonical profiles are fresh-incident, existing-incident, missing-owner, confluence-unavailable, slack-rate-limit, jira-lost-ack and changed-flag-version. Strict in-process capabilities cover metrics, service catalog, deployments, Jira, Confluence, Slack and feature flags; every receipt is marked simulated with externalEffect false, and the world boundary requires externalNetwork false and externalEffects false. Domain, persistence and HTTP behavior are covered by the 322-test gate. See ../docs/SIMULATION_LAB.md."
+    },
+    "simulation_lab_effect_lifecycle": {
+      "status": "verified",
+      "evidence_or_limit": "The flagship workflow uses the shared Goal Agent prepare, exact approval, authoritative recheck and commit boundary. Stable operation keys provide duplicate-safe local replay; a committed Jira write with a lost acknowledgement remains unknown until explicit operation-ledger reconciliation; a changed feature-flag revision rejects the stale prepared action. Trusted outcome validation compares the typed result with authoritative world state rather than accepting agent prose."
+    },
+    "simulation_lab_reset_and_faults": {
+      "status": "verified",
+      "evidence_or_limit": "Fault toggles are allowlisted and scoped to one world. Reset is refused while the bound workflow, Goal Agent session or any prepared, dispatched or unknown effect is unresolved. A settled reset increments the world generation while prior-generation events and operations remain auditable. World integrity is checked through profile pins, operation hashes, a hash-chained append-only event sequence and a final authoritative state anchor."
+    },
+    "simulation_lab_live_providers": {
+      "status": "integration-required",
+      "evidence_or_limit": "The Simulation Lab never authenticates to or calls live observability, catalog, deployment, Jira, Confluence, Slack or feature-flag systems. Its scripted fixture is not a live-model evaluation, and successful local receipts are not proof of external delivery. Separate reviewed adapters, least-privilege credentials, tenant tests, provider-specific reconciliation, security review and live outcome validation are required outside the sandbox."
+    },
     "adaptive_agent_factory": {
       "status": "implemented",
       "evidence_or_limit": "Administrators can author versioned specifications with mission, instructions, permitted context, allowed capability IDs, strict input/result contracts, required evidence, stop rules, policy references, evaluation cases, and turn/tool/write/time/model-token/cost limits. Saving creates a draft; separate reviewer activation is required before workflow placement. Final release-wide browser and accessibility certification is still a gate."

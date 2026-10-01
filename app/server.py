@@ -26,17 +26,18 @@ import ssl
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
-from urllib.error import URLError
 import uuid
 
 import agent_factory as factory_engine
+from capability_runtime import (CapabilityAdapterError, CapabilityExecution,
+                                CapabilityRuntime, LocalFixtureAdapter)
 import factory_fixtures
 import integrations
+import simulation_lab
 
 from domain import (RuleError, SchemaDefinitionError, assert_supported_schema, content_hash,
                     evaluate_rule, schema_assignable, template_hashes, validate_instance)
@@ -50,8 +51,8 @@ from scenarios import (SCENARIO_SCHEMA_VERSION, ScenarioError,
 
 
 ROOT = Path(__file__).resolve().parent
-APP_VERSION = "2.0.0"
-SCHEMA_VERSION = 11
+APP_VERSION = "2.1.0"
+SCHEMA_VERSION = 12
 BUILTIN_CONTRACT_VERSION = "1.3.0"
 USERS = [
     {"id": "author", "name": "Alex Chen", "role": "admin"},
@@ -62,7 +63,7 @@ USERS = [
 ROLES = {u["role"] for u in USERS}
 ACTIVE = {"queued", "running", "waiting_approval", "waiting_execution", "waiting_input"}
 TERMINAL = {"completed", "rejected", "expired", "failed", "cancelled"}
-EFFECT_STATES = ("prepared", "dispatched", "acknowledged", "unknown", "reconciled")
+EFFECT_STATES = ("prepared", "dispatched", "acknowledged", "failed", "unknown", "reconciled")
 DEFAULT_CONFIG = {"executionMode": "automatic", "executorRole": "contributor",
                   "approvalRequired": False, "approverRole": "reviewer",
                   "timeoutSeconds": 30, "retries": 2}
@@ -463,6 +464,8 @@ PERSISTED_JSON_TABLES = (
     "agents", "templates", "runs", "events", "tickets", "effects",
     "plans", "experiments", "audit", "outbox", "connections",
     "connection_health", "artifacts", "run_requests",
+    "agent_specs", "agent_runs", "simulation_worlds",
+    "simulation_events", "simulation_operations",
 )
 
 
@@ -898,6 +901,38 @@ def require(user, roles):
         raise APIError(403, "ROLE_DENIED", "This action requires role: " + ", ".join(sorted(roles)))
 
 
+class SimulationLabCapabilityAdapter:
+    """Trusted bridge from frozen capability bindings to one durable world."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def _invoke(self, action, context, purpose):
+        # Provider failures are part of the simulated world's durable truth:
+        # a rate-limit counter may have been consumed, or a write may have
+        # committed before its acknowledgement was lost.  Commit that state
+        # first, then surface the typed adapter error to the agent runtime.
+        result = self.store.atomic(
+            self.store._execute_simulation_capability,
+            action, context or {}, purpose, True,
+        )
+        if isinstance(result, CapabilityAdapterError):
+            raise result
+        return result
+
+    def execute(self, action, context):
+        return self._invoke(action, context, "execute")
+
+    def recheck(self, action, context):
+        return self._invoke(action, context, "recheck")
+
+    def reconcile(self, action, context):
+        # Reconciliation is called from an existing effect transaction.
+        return self.store._execute_simulation_capability(
+            action, context or {}, "reconcile",
+        )
+
+
 class Store:
     def __init__(self, path, latency=1.0):
         self.path = str(path)
@@ -913,6 +948,14 @@ class Store:
         self.integration_secrets = EnvironmentSecretResolver()
         self.integration_http = StdlibHttpExecutor()
         self.integration_rate_limiter = integrations.InMemoryRateLimiter()
+        self.capability_runtime = CapabilityRuntime()
+        self.capability_runtime.register(
+            "local-fixture.*", LocalFixtureAdapter(factory_fixtures), version="1.0.0"
+        )
+        self.capability_runtime.register(
+            "axiom.simulation.*", SimulationLabCapabilityAdapter(self),
+            version=simulation_lab.ADAPTER_VERSION,
+        )
 
         # Refuse a database created by a newer runtime before executing any
         # schema DDL.  A compatibility failure must be read-only: merely
@@ -961,7 +1004,7 @@ class Store:
                     operation_key TEXT NOT NULL,
                     operation_generation INTEGER NOT NULL,
                     action_fingerprint TEXT NOT NULL,
-                    state TEXT NOT NULL CHECK(state IN ('prepared','dispatched','acknowledged','unknown','reconciled')),
+                    state TEXT NOT NULL CHECK(state IN ('prepared','dispatched','acknowledged','failed','unknown','reconciled')),
                     data TEXT NOT NULL,
                     UNIQUE(run_id,node_id,operation_generation)
                 );
@@ -976,6 +1019,27 @@ class Store:
                 CREATE TABLE IF NOT EXISTS run_requests (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS agent_specs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS agent_runs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS simulation_worlds (
+                    id TEXT PRIMARY KEY,
+                    data TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS simulation_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    world_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    data TEXT NOT NULL,
+                    UNIQUE(world_id, sequence)
+                );
+                CREATE TABLE IF NOT EXISTS simulation_operations (
+                    operation_key TEXT PRIMARY KEY,
+                    world_id TEXT NOT NULL,
+                    action_hash TEXT NOT NULL,
+                    data TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS simulation_events_world_id
+                    ON simulation_events(world_id, sequence);
+                CREATE INDEX IF NOT EXISTS simulation_operations_world_id
+                    ON simulation_operations(world_id);
                 CREATE TABLE IF NOT EXISTS schema_migrations (
                     version INTEGER PRIMARY KEY,
                     name TEXT NOT NULL UNIQUE,
@@ -1000,6 +1064,351 @@ class Store:
 
     def all(self, table):
         return [decode_json_strict(row["data"]) for row in self.db.execute(f"SELECT data FROM {table} ORDER BY rowid DESC")]
+
+    # ------------------------------------------------------------------
+    # Stateful enterprise simulation persistence
+
+    def simulation_operation(self, operation_key):
+        row = self.db.execute(
+            "SELECT data FROM simulation_operations WHERE operation_key=?",
+            (operation_key,),
+        ).fetchone()
+        return decode_json_strict(row["data"]) if row else None
+
+    def simulation_events(self, world_id, limit=300, generation=None):
+        bounded = min(max(int(limit), 1), 1000)
+        if generation is None:
+            rows = self.db.execute(
+                "SELECT sequence,data FROM simulation_events WHERE world_id=? "
+                "ORDER BY sequence DESC LIMIT ?",
+                (world_id, bounded),
+            ).fetchall()
+        else:
+            # Generation is stored inside the immutable event envelope so the
+            # schema stays compatible while resets retain the complete audit.
+            rows = self.db.execute(
+                "SELECT sequence,data FROM simulation_events WHERE world_id=? "
+                "ORDER BY sequence",
+                (world_id,),
+            ).fetchall()
+        events = []
+        for row in reversed(rows):
+            payload = decode_json_strict(row["data"])
+            events.append({
+                **payload,
+                "domainSequence": payload.get("sequence"),
+                "sequence": row["sequence"],
+            })
+        if generation is not None:
+            events = [
+                item for item in reversed(events)
+                if item.get("generation", 1) == generation
+            ][-bounded:]
+        return events
+
+    def _persist_simulation_transition(self, world, events=None, operation=None):
+        """Persist one world transition, its events, and operation atomically.
+
+        The caller owns the surrounding transaction.  Stable operation keys
+        may be replayed only when every immutable identity field matches.
+        """
+        if not isinstance(world, dict) or not isinstance(world.get("id"), str):
+            raise APIError(500, "SIMULATION_WORLD_INVALID", "The simulation adapter returned an invalid world record.")
+        world = copy.deepcopy(world)
+        stamp = now()
+        world["updatedAt"] = stamp
+        next_sequence = self.db.execute(
+            "SELECT COALESCE(MAX(sequence),0) FROM simulation_events WHERE world_id=?",
+            (world["id"],),
+        ).fetchone()[0] + 1
+        for event in events or []:
+            if not isinstance(event, dict):
+                raise APIError(500, "SIMULATION_EVENT_INVALID", "The simulation adapter returned an invalid event.")
+            payload = copy.deepcopy(event)
+            payload.setdefault("id", f"sim_event_{world['id']}_{next_sequence:05d}")
+            payload.setdefault("time", world.get("virtualTime", stamp))
+            payload.setdefault("generation", world.get("generation", 1))
+            self.db.execute(
+                "INSERT INTO simulation_events(world_id,sequence,data) VALUES (?,?,?)",
+                (world["id"], next_sequence, encode(payload)),
+            )
+            next_sequence += 1
+        world["eventCount"] = next_sequence - 1
+        self.put("simulation_worlds", world)
+        if operation is not None:
+            record = copy.deepcopy(operation)
+            key = record.get("operationKey")
+            action_hash = record.get("actionHash")
+            if (not isinstance(key, str) or not key
+                    or not isinstance(action_hash, str) or not action_hash):
+                raise APIError(500, "SIMULATION_OPERATION_INVALID", "A simulated write is missing its stable operation identity.")
+            record.update(
+                worldId=world["id"], worldGeneration=world.get("generation", 1),
+                updatedAt=stamp,
+            )
+            existing = self.simulation_operation(key)
+            if existing:
+                immutable = (
+                    "worldId", "worldGeneration", "actionHash", "toolId", "payloadHash",
+                )
+                changed = [name for name in immutable if existing.get(name) != record.get(name)]
+                if changed:
+                    raise APIError(
+                        409, "SIMULATION_OPERATION_CONFLICT",
+                        "The stable simulated operation identity is already bound to a different action.",
+                        {"changedFields": changed},
+                    )
+                return world, existing
+            self.db.execute(
+                "INSERT INTO simulation_operations(operation_key,world_id,action_hash,data) VALUES (?,?,?,?)",
+                (key, world["id"], action_hash, encode(record)),
+            )
+        return world, copy.deepcopy(operation)
+
+    def public_simulation_world(self, world, user=None):
+        simulation_lab.validate_world(world)
+        records = copy.deepcopy(world["records"])
+        profile = next(
+            (item for item in simulation_lab.profiles() if item["id"] == world["profileId"]),
+            {"id": world["profileId"], "name": world["profileId"], "description": ""},
+        )
+        metric = records["metrics"].get("atlas-checkout", {})
+        metric_state = metric.get("state", "degraded")
+        queue_by_state = {"degraded": 4210, "recovering": 680, "healthy": 82}
+        series = [{
+            "time": "2026-09-30T08:55:00Z", "errorRate": 18.7,
+            "queueDepth": 4210,
+        }]
+        if metric.get("revision", 12) > 12:
+            series.append({
+                "time": metric.get("windowEnd", world["clock"]["now"]),
+                "errorRate": metric.get("errorRatePercent", 3.4),
+                "queueDepth": queue_by_state.get(metric_state, 680),
+            })
+        services = records.get("services", {})
+        service = services.get("atlas-checkout", {})
+        jira_issues = list(records.get("jiraIssues", {}).values())
+        confluence_available = not world.get("faults", {}).get("confluenceUnavailable")
+        faults = [
+            {
+                "id": "confluence-unavailable", "name": "Confluence outage",
+                "description": "Return a deterministic 503 when the runbook is requested.",
+                "enabled": not confluence_available,
+            },
+            {
+                "id": "slack-rate-limit", "name": "Slack rate limit",
+                "description": "Return one 429 with retry guidance before accepting the message.",
+                "enabled": world.get("faults", {}).get("slackRateLimitRemaining", 0) > 0,
+            },
+            {
+                "id": "jira-lost-ack", "name": "Jira acknowledgement loss",
+                "description": "Commit the Jira issue, then lose the response so reconciliation is required.",
+                "enabled": world.get("faults", {}).get("jiraLostAckRemaining", 0) > 0,
+            },
+        ]
+        provider_health = [
+            ("metrics", "Pulse Metrics", "healthy", 42),
+            ("jira", "Jira mirror", "healthy", 61),
+            ("confluence", "Confluence mirror", "healthy" if confluence_available else "unavailable", 54),
+            ("slack", "Slack mirror", "rate_limited" if world.get("faults", {}).get("slackRateLimitRemaining", 0) else "healthy", 48),
+            ("flags", "Feature Flags", "healthy", 37),
+        ]
+        all_events = self.simulation_events(world["id"], limit=1000)
+        raw_events = self.simulation_events(
+            world["id"], limit=300, generation=world.get("generation", 1)
+        )
+        events = []
+        for item in raw_events:
+            details = item.get("details", {}) if isinstance(item.get("details"), dict) else {}
+            kind = item.get("kind", "observation")
+            detail = {
+                "world.created": "Created a new isolated Atlas Checkout world from a pinned profile.",
+                "capability.observed": "A registered provider mirror returned a schema-valid observation.",
+                "capability.failed": "A controlled provider condition changed the next bounded decision.",
+                "operation.committed": "Committed one idempotent write inside the sandbox mirror.",
+                "operation.reconciled": "Recovered the committed result by stable operation identity.",
+                "delivery.acknowledgement_lost": "The provider committed the operation but its acknowledgement was lost.",
+                "fault.configured": "An operator changed a controlled sandbox condition.",
+                "fault.changed": "An operator changed a controlled sandbox condition.",
+                "clock.advanced": "Advanced deterministic virtual time; no wall-clock delay was used.",
+                "metrics.recovering": "Fresh simulated telemetry shows recovery beginning.",
+                "metrics.recovered": "Two healthy windows now satisfy the recovery condition.",
+                "feature_flag.external_change": "A concurrent actor changed the feature-flag revision.",
+            }.get(kind, "Recorded an append-only simulation event.")
+            events.append({
+                **copy.deepcopy(item), "time": item.get("at"), "type": kind,
+                "title": kind.replace(".", " ").title(), "detail": detail,
+                "system": item.get("provider"), "capability": item.get("toolId"),
+                "trigger": details.get("code") or details.get("profileId"),
+                "status": "failed" if kind in {"capability.failed", "delivery.acknowledgement_lost"} else "recorded",
+            })
+        result = {
+            "schemaVersion": world["schemaVersion"], "id": world["id"],
+            "name": profile["name"] + " · Atlas Checkout", "profileId": world["profileId"],
+            "generation": world["generation"],
+            "profileVersion": world["profileVersion"], "profileHash": world["profileHash"],
+            "status": "ready", "virtualTime": world["clock"]["now"],
+            "manifestHash": digest({
+                "worldSchema": world["schemaVersion"], "profileHash": world["profileHash"],
+                "capabilityVersion": simulation_lab.CAPABILITY_VERSION,
+            }),
+            "revision": world["revision"], "eventCount": len(events),
+            "operationCount": len(world.get("operations", {})),
+            "archivedGenerations": sorted({
+                item.get("generation") for item in all_events
+                if isinstance(item.get("generation"), int)
+                and item.get("generation") != world.get("generation", 1)
+            }),
+            "sandbox": copy.deepcopy(world["sandbox"]), "records": records,
+            "service": {
+                "id": service.get("serviceId", "atlas-checkout"),
+                "name": service.get("displayName", "Atlas Checkout API"),
+                "region": "Global · ap-south-1 / eu-west-1",
+                "owner": service.get("ownerTeam") or "Unassigned",
+            },
+            "serviceHealth": [
+                {"id": ident, "name": name, "status": status, "latencyMs": latency}
+                for ident, name, status, latency in provider_health
+            ],
+            "metrics": {
+                "series": series,
+                "current": {
+                    "errorRate": metric.get("errorRatePercent"),
+                    "queueDepth": queue_by_state.get(metric_state, 4210),
+                    "latencyMs": metric.get("p95LatencyMs"),
+                    "successRate": max(0, 100 - float(metric.get("errorRatePercent", 100))),
+                    "state": metric_state,
+                },
+            },
+            "deployments": [{
+                **copy.deepcopy(item), "id": item.get("deploymentId"),
+                "name": item.get("version"), "summary": item.get("changeSummary"),
+                "commit": item.get("commitSha"), "deployedAt": item.get("completedAt"),
+                "service": item.get("serviceId"), "environment": "production",
+            } for item in records.get("deployments", {}).values()],
+            "jira": {"issues": [{
+                **copy.deepcopy(item), "id": item.get("key"),
+                "priority": item.get("severity"), "updatedAt": item.get("createdAt"),
+            } for item in jira_issues]},
+            "confluence": {"pages": [{
+                **copy.deepcopy(item), "id": item.get("pageId"),
+                "space": item.get("spaceKey"), "excerpt": item.get("summary"),
+                "updatedAt": item.get("lastReviewedAt"),
+            } for item in records.get("confluencePages", {}).values()] if confluence_available else []},
+            "slack": {"channels": [{
+                "id": channel.get("channelId"), "name": channel.get("name"),
+                "revision": channel.get("revision"),
+                "messages": [{
+                    **copy.deepcopy(message), "author": message.get("authorId"),
+                    "time": message.get("createdAt"),
+                } for message in channel.get("messages", [])],
+            } for channel in records.get("slackChannels", {}).values()]},
+            "featureFlags": [{
+                **copy.deepcopy(item), "id": item.get("flagKey"), "key": item.get("flagKey"),
+                "name": item.get("flagKey"), "version": item.get("revision"),
+                "value": item.get("enabled"), "owner": "Commerce Reliability",
+            } for item in records.get("featureFlags", {}).values()],
+            "events": events, "faults": faults,
+        }
+        run_id = world.get("workflowRunId")
+        if isinstance(run_id, str):
+            try:
+                run = self.get("runs", run_id)
+            except APIError:
+                result["workflow"] = {"id": run_id, "status": "unavailable"}
+            else:
+                child_ids = [
+                    node.get("childAgentRunId") for node in run.get("nodes", [])
+                    if isinstance(node.get("childAgentRunId"), str)
+                ]
+                result["workflow"] = {
+                    "id": run_id, "status": run.get("status"),
+                    "currentNodeIds": [node["nodeId"] for node in run.get("nodes", [])
+                                       if node.get("status") in ACTIVE],
+                    "agentRunId": child_ids[-1] if child_ids else None,
+                }
+                result["status"] = run.get("status", "running")
+        return result
+
+    def _execute_simulation_capability(self, action, context, purpose, defer_failure=False):
+        """Apply one registered sandbox capability and persist its causal trace."""
+        arguments = copy.deepcopy(action.get("arguments", {}))
+        world_id = arguments.get("worldId")
+        if not isinstance(world_id, str):
+            raise CapabilityAdapterError(
+                "WORLD_BINDING_CHANGED",
+                "The host-bound simulation world is missing from this capability call.",
+            )
+        try:
+            persisted = self.get("simulation_worlds", world_id)
+        except APIError as exc:
+            raise CapabilityAdapterError(
+                "SIMULATION_WORLD_NOT_FOUND",
+                "The host-bound simulation world is unavailable.",
+                condition="missingCapability",
+            ) from exc
+        world = copy.deepcopy(persisted)
+        initial_event_count = len(world.get("events", []))
+        suppress_write = bool(context.get("suppressWrite") and action.get("effect") == "write")
+        try:
+            # A prepared action may wait while business state changes. Apply
+            # the earliest pre-existing virtual event before the normal
+            # authoritative precondition read; no profile or scenario branch
+            # is exposed to the planner.
+            if purpose == "recheck" and world.get("scheduled"):
+                due = min(item.get("dueSeconds", 0) for item in world["scheduled"])
+                elapsed = world.get("clock", {}).get("elapsedSeconds", 0)
+                simulation_lab.advance_clock(world, max(0, due - elapsed))
+            envelope = simulation_lab.execute(
+                world, action.get("toolId"), arguments,
+                operation_key=action.get("operationKey") if action.get("effect") == "write" else None,
+                action_hash=action.get("actionHash"),
+                purpose="reconcile" if purpose == "reconcile" else "execute",
+            )
+        except simulation_lab.SimulationError as exc:
+            raise CapabilityAdapterError(exc.code, exc.message) from exc
+
+        events = copy.deepcopy(world.get("events", [])[initial_event_count:])
+        operation = None
+        if isinstance(envelope.get("operation"), dict):
+            operation = {
+                **copy.deepcopy(envelope["operation"]),
+                "operationKey": action.get("operationKey"),
+                "worldId": world_id,
+                "toolId": action.get("toolId"),
+                "actionHash": action.get("actionHash"),
+                "payloadHash": digest(arguments),
+                "result": copy.deepcopy(envelope.get("output") or envelope["operation"].get("output")),
+                "executionReceipt": copy.deepcopy(envelope.get("receipt") or envelope["operation"].get("receipt")),
+            }
+        if not suppress_write:
+            self._persist_simulation_transition(world, events, operation)
+        receipt = copy.deepcopy(envelope.get("receipt") or {})
+        if suppress_write:
+            receipt.update(suppressed=True, simulated=True, externalEffect=False)
+        if not envelope.get("ok"):
+            fault = envelope.get("fault") or {}
+            error = CapabilityAdapterError(
+                fault.get("code", "SIMULATION_CAPABILITY_FAILED"),
+                fault.get("message", "The simulated provider call failed."),
+                retryable=bool(fault.get("retryable")),
+                outcome_unknown=bool(fault.get("outcomeUnknown")),
+                condition=fault.get("condition"), receipt=receipt,
+            )
+            if defer_failure:
+                return error
+            raise error
+        output = copy.deepcopy(envelope.get("output"))
+        if not isinstance(output, dict):
+            raise CapabilityAdapterError(
+                "SIMULATION_OUTPUT_INVALID",
+                "The simulated provider did not return its declared object result.",
+            )
+        return CapabilityExecution(
+            output=output, receipt=receipt,
+            provider=str(receipt.get("provider") or "Atlas Simulation Lab"),
+            external_effect=False,
+        )
 
     def audit(self, user, action, target, detail=None):
         data = {"time": now(), "actor": user["id"] if isinstance(user, dict) else user,
@@ -1038,6 +1447,7 @@ class Store:
             (9, "pinned-demo-fixtures-and-bound-action-records"),
             (10, "adaptive-goal-agent-specs-and-sessions"),
             (11, "external-connection-gateway"),
+            (12, "stateful-enterprise-simulation-lab"),
         )
         user_version = self.db.execute("PRAGMA user_version").fetchone()[0]
         recorded_version = self.db.execute(
@@ -1064,7 +1474,8 @@ class Store:
             "action_fingerprint", "state", "data",
         }
         if effect_columns and (not required_effect_columns <= effect_columns
-                               or "reconciled" not in effect_table_sql):
+                               or "reconciled" not in effect_table_sql
+                               or "'failed'" not in effect_table_sql):
             legacy_rows = self.db.execute("SELECT * FROM effects ORDER BY rowid").fetchall()
             self.db.execute("DROP INDEX IF EXISTS effects_run_id")
             self.db.execute("DROP INDEX IF EXISTS effects_operation_key")
@@ -1076,7 +1487,7 @@ class Store:
                 operation_key TEXT NOT NULL,
                 operation_generation INTEGER NOT NULL,
                 action_fingerprint TEXT NOT NULL,
-                state TEXT NOT NULL CHECK(state IN ('prepared','dispatched','acknowledged','unknown','reconciled')),
+                state TEXT NOT NULL CHECK(state IN ('prepared','dispatched','acknowledged','failed','unknown','reconciled')),
                 data TEXT NOT NULL,
                 UNIQUE(run_id,node_id,operation_generation)
             )""")
@@ -1894,7 +2305,11 @@ class Store:
         return result
 
     def factory_tool_catalog(self):
-        return [*factory_fixtures.tool_catalog(), *self._external_capability_catalog()]
+        return [
+            *factory_fixtures.tool_catalog(),
+            *simulation_lab.tool_catalog(),
+            *self._external_capability_catalog(),
+        ]
 
     def _adapter_for_connection(self, connection):
         transport = connection.get("transport")
@@ -2047,7 +2462,9 @@ class Store:
         )
         return {"execution": "local-fixture", "durableRuntime": True, "provider": "configured-model" if configured else "unavailable",
                 "modelConfigured": configured, "productionIdentity": False, "externalWrites": external_writes,
-                "simulation": True, "experiments": True, "graphSemantics": "bounded structured DAG",
+                "simulation": True, "statefulSimulationLab": True,
+                "virtualClock": True, "faultInjection": True,
+                "experiments": True, "graphSemantics": "bounded structured DAG",
                 "preparedActionApproval": True, "effectLedger": True,
                 "adaptiveGoalAgents": True, "agentFactory": True,
                 "limits": {"nodes": 100, "edges": 300, "conditionDepth": 8, "ruleNodes": 100},
@@ -2062,8 +2479,8 @@ class Store:
 
     def bootstrap(self, user, csrf):
         runs = [self.public_run(r, user) for r in self.all("runs")[:100]]
-        template_order = {"customer-resolution": 0}
-        template_order.update({spec["id"]: index for index, spec in enumerate(DEMO_WORKFLOWS, start=1)})
+        template_order = {"atlas-checkout-incident-command": 0, "customer-resolution": 1}
+        template_order.update({spec["id"]: index for index, spec in enumerate(DEMO_WORKFLOWS, start=2)})
         templates = self.all("templates")
         templates.sort(key=lambda item: (
             template_order.get(item.get("id"), len(template_order) + 1),
@@ -2080,6 +2497,7 @@ class Store:
                 "connections": self.public_connections(),
                 "connectionCatalog": catalog["providers"], "integrationCatalog": catalog,
                 "agentFactory": self.factory_bundle(user),
+                "simulationLab": self.simulation_lab_bundle(user),
                 "capabilities": self.capabilities(), "defaultTemplateId": "customer-resolution"}
 
     def connection_action(self, ident, action, user):
@@ -2373,6 +2791,264 @@ class Store:
             self.audit(publisher, "agent_spec.published", spec["id"], {"version": version_number, "hash": version["hash"]})
         return spec
 
+    def _seed_simulation_lab_workflow(self, default_world_id):
+        template_id = "atlas-checkout-incident-command"
+        if self.db.execute("SELECT 1 FROM templates WHERE id=?", (template_id,)).fetchone():
+            return False
+        spec = self.get("agent_specs", simulation_lab.INCIDENT_COMMANDER_ID)
+        version = self._agent_spec_version(spec, spec.get("publishedVersion"))
+        goal_agent_id = self._goal_agent_id(spec["id"], version["version"])
+
+        def configured(**values):
+            return {**copy.deepcopy(DEFAULT_CONFIG), **values}
+
+        nodes = [
+            {
+                "id": "incident_commander", "agentId": goal_agent_id,
+                "label": "Adaptive Incident Commander", "x": 90, "y": 220,
+                "config": configured(
+                    timeoutSeconds=1800, factorySpecId=spec["id"],
+                    factorySpecVersion=version["version"], factoryMode="fixture",
+                    goal="Restore Atlas Checkout safely, avoid duplicate incidents, and verify recovery from fresh evidence.",
+                ),
+            },
+            {
+                "id": "evidence_receipt", "agentId": "receipt",
+                "label": "Seal incident evidence receipt", "x": 520, "y": 220,
+                "config": configured(),
+            },
+            {
+                "id": "complete", "agentId": "end",
+                "label": "Return verified incident outcome", "x": 860, "y": 220,
+                "config": configured(),
+            },
+        ]
+        edges = [
+            {"id": "edge_goal_receipt", "source": "incident_commander", "target": "evidence_receipt"},
+            {"id": "edge_receipt_complete", "source": "evidence_receipt", "target": "complete"},
+        ]
+        input_schema = {
+            "type": "object",
+            "properties": {
+                "worldId": {"type": "string", "minLength": 1, "maxLength": 120,
+                            "description": "Host-bound isolated simulation world."},
+                "alertId": {"type": "string", "minLength": 1, "maxLength": 120,
+                            "description": "Atlas Checkout alert to investigate."},
+                "ownerTeam": {"type": "string", "maxLength": 200},
+                "slackChannelId": {"type": "string", "maxLength": 120},
+            },
+            "required": ["worldId", "alertId"], "additionalProperties": False,
+        }
+        snapshot = {
+            "id": template_id, "name": "Atlas Checkout SEV-1 · Adaptive Incident Command",
+            "description": "A Goal Agent correlates six sandbox provider mirrors, adapts to discovered evidence, pauses for exact writes, verifies recovery, and returns an authoritative incident outcome.",
+            "inputSchema": copy.deepcopy(input_schema), "nodes": copy.deepcopy(nodes),
+            "edges": copy.deepcopy(edges), "version": 1,
+        }
+        factory_plans, factory_issues = self.compile_factory_plans(snapshot)
+        if factory_issues:
+            raise RuntimeError("The seeded Incident Commander plan is invalid: " + encode(factory_issues))
+        snapshot["factoryPlans"] = factory_plans
+        validation = self.validate(snapshot)
+        if not validation["valid"]:
+            raise RuntimeError("The seeded Incident Commander workflow is invalid: " + encode(validation["issues"]))
+        self._pin_snapshot_agents(snapshot)
+        hashes = template_hashes(snapshot)
+        snapshot.update(
+            schemaVersion="axiom.contract.v1", compilerVersion=COMPILER_VERSION,
+            interpreterVersion=INTERPRETER_VERSION, validatorVersion="axiom.validator.v1",
+            policyVersion="simulation.atlas-incident-v1",
+            compiledPlan=compile_graph(snapshot, {agent["id"]: agent for agent in self.all("agents")}),
+            **hashes,
+        )
+        stamp = now()
+        release = {
+            "version": 1, "status": "published", "publishedAt": stamp,
+            "publishedBy": "reviewer", "authorId": "system",
+            "snapshot": snapshot, "hash": digest(snapshot), **hashes,
+        }
+        example = {"worldId": default_world_id, "alertId": "ALT-CHECKOUT-9001"}
+        template = {
+            "id": template_id, "name": snapshot["name"],
+            "description": snapshot["description"], "version": 1,
+            "status": "published", "draftRevision": 1, "publishedVersion": 1,
+            "inputSchema": input_schema, "nodes": nodes, "edges": edges,
+            "versions": [release], "authorId": "system", "updatedAt": stamp,
+            "createdAt": stamp, "tags": ["flagship", "goal-agent", "incident", "simulation-lab"],
+            "exampleInput": example,
+            "seed": {"kind": "stateful-simulation", "version": 1},
+        }
+        self.put("templates", template)
+        self.audit("system", "simulation.workflow_seeded", template_id, {"publishedVersion": 1})
+        return True
+
+    def seed_simulation_lab(self):
+        """Seed one resettable world and the published adaptive flagship."""
+        default_world_id = "atlas-fresh-incident"
+        if not self.db.execute(
+            "SELECT 1 FROM simulation_worlds WHERE id=?", (default_world_id,)
+        ).fetchone():
+            world = simulation_lab.create_world("fresh-incident", default_world_id, generation=1)
+            world.update(createdAt=now(), updatedAt=now())
+            self._persist_simulation_transition(world, world.get("events", []))
+            self.audit("system", "simulation.world_seeded", default_world_id, {
+                "profileId": "fresh-incident", "generation": 1,
+            })
+        self._seed_simulation_lab_workflow(default_world_id)
+
+    def simulation_lab_bundle(self, user):
+        worlds = [self.public_simulation_world(item, user) for item in self.all("simulation_worlds")[:30]]
+        profiles = []
+        for profile in simulation_lab.profiles():
+            profiles.append({
+                **copy.deepcopy(profile), "category": "Evidence variation",
+                "difficulty": "Guided",
+                "objective": "Restore checkout, avoid duplicate work, and prove the final business state.",
+            })
+        return {
+            "profiles": profiles, "worlds": worlds,
+            "activeWorldId": worlds[0]["id"] if worlds else None,
+            "templateId": "atlas-checkout-incident-command",
+            "boundary": "Isolated local sandbox; no external network or external effects.",
+        }
+
+    def create_simulation_world(self, body, user):
+        require(user, {"admin", "operator"})
+        profile_id = body.get("profileId")
+        if not isinstance(profile_id, str):
+            raise APIError(400, "SIMULATION_PROFILE_REQUIRED", "Choose one registered simulation profile.")
+        ident = "world_" + uuid.uuid4().hex[:16]
+        try:
+            world = simulation_lab.create_world(profile_id, ident, generation=1)
+        except simulation_lab.SimulationError as exc:
+            raise APIError(400, exc.code, exc.message, exc.details) from exc
+        world.update(createdAt=now(), updatedAt=now())
+        self._persist_simulation_transition(world, world.get("events", []))
+        self.audit(user, "simulation.world_created", ident, {
+            "profileId": world["profileId"], "generation": world["generation"],
+        })
+        return {"world": self.public_simulation_world(world, user)}
+
+    def get_simulation_world(self, ident, user):
+        return {"world": self.public_simulation_world(self.get("simulation_worlds", ident), user)}
+
+    def reset_simulation_world(self, ident, user):
+        require(user, {"admin", "operator"})
+        current = self.get("simulation_worlds", ident)
+        run_id = current.get("workflowRunId")
+        if isinstance(run_id, str):
+            try:
+                run = self.get("runs", run_id)
+            except APIError:
+                run = None
+            if run and run.get("status") in ACTIVE:
+                raise APIError(
+                    409, "SIMULATION_RUN_ACTIVE",
+                    "Finish or cancel the active workflow before resetting its bound sandbox world.",
+                )
+        bound_sessions = [
+            run for run in self.all("agent_runs")
+            if run.get("specId") == simulation_lab.INCIDENT_COMMANDER_ID
+            and run.get("_state", {}).get("input", {}).get("worldId") == ident
+        ]
+        for session in bound_sessions:
+            unresolved_effect = any(
+                effect.get("state") in {"prepared", "dispatched", "unknown"}
+                for effect in self._adaptive_effects(session["id"])
+            )
+            session_status = session.get("_state", {}).get("status")
+            settled_session = session_status in {"completed", "failed", "cancelled"} or (
+                session_status == "stopped" and not unresolved_effect
+            )
+            if not settled_session or unresolved_effect:
+                raise APIError(
+                    409, "SIMULATION_SESSION_ACTIVE",
+                    "Finish or reconcile every Goal Agent session bound to this sandbox before resetting it.",
+                    {"agentRunId": session["id"]},
+                )
+        try:
+            world = simulation_lab.create_world(
+                current["profileId"], ident,
+                generation=int(current.get("generation", 1)) + 1,
+            )
+        except simulation_lab.SimulationError as exc:
+            raise APIError(409, exc.code, exc.message, exc.details) from exc
+        world.update(
+            createdAt=current.get("createdAt", now()), updatedAt=now(), resetAt=now(),
+        )
+        archived_event_count = len(self.simulation_events(ident, limit=1000))
+        archived_operation_count = self.db.execute(
+            "SELECT COUNT(*) FROM simulation_operations WHERE world_id=?", (ident,)
+        ).fetchone()[0]
+        self._persist_simulation_transition(world, world.get("events", []))
+        self.audit(user, "simulation.world_reset", ident, {
+            "profileId": world["profileId"], "generation": world["generation"],
+            "previousWorkflowRunId": run_id,
+            "archivedEventCount": archived_event_count,
+            "archivedOperationCount": archived_operation_count,
+        })
+        return {"world": self.public_simulation_world(world, user)}
+
+    def set_simulation_fault(self, ident, body, user):
+        require(user, {"admin", "operator"})
+        fault_id, enabled = body.get("faultId"), body.get("enabled")
+        if not isinstance(fault_id, str) or not isinstance(enabled, bool):
+            raise APIError(400, "SIMULATION_FAULT_INVALID", "Choose a registered fault and a boolean state.")
+        world = self.get("simulation_worlds", ident)
+        first_event = len(world.get("events", []))
+        try:
+            simulation_lab.set_fault(world, fault_id, enabled)
+        except simulation_lab.SimulationError as exc:
+            raise APIError(400, exc.code, exc.message, exc.details) from exc
+        self._persist_simulation_transition(world, world.get("events", [])[first_event:])
+        self.audit(user, "simulation.fault_changed", ident, {
+            "faultId": fault_id, "enabled": enabled, "generation": world["generation"],
+        })
+        return {"world": self.public_simulation_world(world, user)}
+
+    def start_simulation_world(self, ident, user):
+        require(user, {"admin", "reviewer", "contributor"})
+        world = self.get("simulation_worlds", ident)
+        previous_id = world.get("workflowRunId")
+        if isinstance(previous_id, str):
+            try:
+                previous = self.get("runs", previous_id)
+            except APIError:
+                previous = None
+            if previous and previous.get("status") in ACTIVE:
+                child_id = next((
+                    node.get("childAgentRunId") for node in previous.get("nodes", [])
+                    if isinstance(node.get("childAgentRunId"), str)
+                ), None)
+                agent_run = (
+                    self.public_agent_run(self.get("agent_runs", child_id), user)
+                    if child_id else None
+                )
+                return {
+                    "run": self.public_run(previous, user), "agentRun": agent_run,
+                    "world": self.public_simulation_world(world, user), "deduplicated": True,
+                }
+            if previous:
+                raise APIError(
+                    409, "SIMULATION_RESET_REQUIRED",
+                    "Reset this sandbox generation before starting another guided incident.",
+                )
+        run = self.create_run({
+            "templateId": "atlas-checkout-incident-command", "mode": "fixture",
+            "scenario": "happy",
+            "input": {"worldId": ident, "alertId": "ALT-CHECKOUT-9001"},
+            "idempotencyKey": f"simulation:{ident}:generation:{world.get('generation', 1)}",
+        }, user)
+        world.update(workflowRunId=run["id"], startedAt=now(), updatedAt=now())
+        self.put("simulation_worlds", world)
+        self.audit(user, "simulation.guided_run_started", ident, {
+            "runId": run["id"], "generation": world["generation"],
+        })
+        return {
+            "run": run, "agentRun": None,
+            "world": self.public_simulation_world(world, user),
+        }
+
     def seed_agent_factory(self):
         # A process that no longer exists cannot own a live model/tool lease.
         # Clearing it on local startup is safe; token+revision checks reject any
@@ -2390,8 +3066,9 @@ class Store:
                 continue
             if changed:
                 self.put("agent_runs", run)
-        seeded_ids = {item["id"] for item in factory_fixtures.agent_specs()}
-        for source in factory_fixtures.agent_specs():
+        seeded_sources = [*factory_fixtures.agent_specs(), *simulation_lab.agent_specs()]
+        seeded_ids = {item["id"] for item in seeded_sources}
+        for source in seeded_sources:
             row = self.db.execute("SELECT data FROM agent_specs WHERE id=?", (source["id"],)).fetchone()
             if row:
                 spec = decode_json_strict(row["data"])
@@ -2418,6 +3095,7 @@ class Store:
                 spec["fixtureEnabled"] = False
                 spec["defaultMode"] = "model"
                 self.put("agent_specs", spec)
+        self.seed_simulation_lab()
 
     def _public_agent_spec(self, spec):
         usage = sum(1 for run in self.all("agent_runs") if run.get("specId") == spec["id"])
@@ -2451,7 +3129,8 @@ class Store:
                 if self._can_read_agent_run(item, user)]
         return {
             "specs": specs, "tools": self.factory_tool_catalog(), "runs": runs,
-            "scenarios": factory_fixtures.demo_scenarios(), "provider": self.factory_provider_info(),
+            "scenarios": [*factory_fixtures.demo_scenarios(), *simulation_lab.scenarios()],
+            "provider": self.factory_provider_info(),
         }
 
     def create_agent_spec(self, body, user):
@@ -2600,6 +3279,8 @@ class Store:
             public_effect = {key: copy.deepcopy(effect.get(key)) for key in (
                 "id", "nodeId", "operationKey", "state", "actionFingerprint",
                 "approvalEnvelopeHash", "preparedAt", "dispatchedAt", "acknowledgedAt",
+                "failedAt", "unknownAt", "reconciledAt", "failure", "failureReceipt",
+                "transitions",
                 "connectionIdentity", "integrationPlanHash", "preparedIntegrationCall",
                 "executionReceipt",
             )}
@@ -2713,12 +3394,16 @@ class Store:
         row = self.db.execute("SELECT data FROM effects WHERE operation_key=?", (operation_key,)).fetchone()
         return decode_json_strict(row["data"]) if row else None
 
-    @staticmethod
-    def _is_reconcilable_local_adaptive_effect(effect):
-        binding = effect.get("actionTarget", {}).get("adapterBinding", {})
-        return (binding.get("transport") == "in-process"
-                and isinstance(binding.get("adapterId"), str)
-                and binding["adapterId"].startswith("local-fixture."))
+    def _is_reconcilable_local_adaptive_effect(self, effect):
+        target = copy.deepcopy(effect.get("actionTarget", {}))
+        action = {
+            "actionTarget": target,
+            "toolId": target.get("toolId", "unknown"),
+            "toolVersion": target.get("toolVersion", ""),
+            "effect": "write", "arguments": copy.deepcopy(effect.get("payload", {})),
+            "operationKey": effect.get("operationKey"),
+        }
+        return self.capability_runtime.is_reconcilable(action)
 
     def _reconcile_local_adaptive_effect(self, run, action, effect):
         if effect.get("state") not in {"dispatched", "unknown"}:
@@ -2732,17 +3417,22 @@ class Store:
                 or effect.get("actionFingerprint") != action.get("actionHash")
                 or effect.get("payloadHash") != digest(action.get("arguments"))):
             raise APIError(409, "AGENT_EFFECT_CONFLICT", "The unresolved effect no longer matches the exact prepared adaptive action.")
-        result = factory_fixtures.prepare_write_result(
-            action["toolId"], copy.deepcopy(action["arguments"]), action["operationKey"],
-        )
+        try:
+            execution = self.capability_runtime.reconcile(
+                action, {"runId": run["id"], "effect": copy.deepcopy(effect)},
+            )
+        except CapabilityAdapterError as exc:
+            raise APIError(409, exc.code, exc.message) from exc
+        result = copy.deepcopy(execution.output)
         effect["result"] = copy.deepcopy(result)
         effect["executionReceipt"] = {
-            "provider": "local-fixture-reconciliation", "externalEffect": False,
+            **copy.deepcopy(execution.receipt),
+            "provider": execution.provider, "externalEffect": execution.external_effect,
             "recovered": True, "verifiedAt": now(), "resultHash": digest(result),
             "operationKey": action["operationKey"],
         }
         self._transition_effect(effect, "reconciled", {
-            "resultHash": digest(result), "adapter": "local-fixture-reconciliation",
+            "resultHash": digest(result), "adapter": execution.provider,
         })
         self.factory_event(
             run, "effect.reconciled",
@@ -2763,6 +3453,7 @@ class Store:
             return False
         resumed = copy.deepcopy(state)
         resumed["status"] = "awaiting_tool"
+        resumed.pop("error", None)
         try:
             verified_action = factory_engine.executable_action(run["_compiled"], resumed)
             result = self._reconcile_local_adaptive_effect(run, verified_action, effect)
@@ -2913,11 +3604,16 @@ class Store:
         effect_node_id = f"agent:{run['id']}:{action['id']}"
         if existing:
             changed = []
-            if existing.get("runId") != run["id"]: changed.append("runId")
-            if existing.get("nodeId") != effect_node_id: changed.append("nodeId")
-            if existing.get("actionFingerprint") != action["actionHash"]: changed.append("actionFingerprint")
-            if existing.get("payloadHash") != payload_hash: changed.append("payloadHash")
-            if existing.get("approvalEnvelopeHash") != envelope_hash: changed.append("approvalEnvelopeHash")
+            if existing.get("runId") != run["id"]:
+                changed.append("runId")
+            if existing.get("nodeId") != effect_node_id:
+                changed.append("nodeId")
+            if existing.get("actionFingerprint") != action["actionHash"]:
+                changed.append("actionFingerprint")
+            if existing.get("payloadHash") != payload_hash:
+                changed.append("payloadHash")
+            if existing.get("approvalEnvelopeHash") != envelope_hash:
+                changed.append("approvalEnvelopeHash")
             if integration_plan and existing.get("preparedIntegrationCall", {}).get("planHash") != integration_plan["planHash"]:
                 changed.append("integrationPlanHash")
             if changed:
@@ -2983,20 +3679,51 @@ class Store:
                         toolId=next_state.get("pendingAction", {}).get("toolId"),
                     )
             if next_state.get("status") == "completed":
-                validation = factory_fixtures.validate_outcome(run.get("specId"), next_state)
+                if run.get("specId") == simulation_lab.INCIDENT_COMMANDER_ID:
+                    world_id = next_state.get("input", {}).get("worldId")
+                    try:
+                        world = self.get("simulation_worlds", world_id)
+                        validation = simulation_lab.validate_outcome(world, next_state)
+                    except (APIError, simulation_lab.SimulationError):
+                        validation = {
+                            "validatorId": simulation_lab.OUTCOME_VALIDATOR_ID,
+                            "agentId": run.get("specId"), "businessOutcomeVerified": False,
+                            "status": "unknown", "checks": [],
+                            "reason": "The authoritative simulation world is unavailable for outcome validation.",
+                        }
+                else:
+                    validation = factory_fixtures.validate_outcome(run.get("specId"), next_state)
                 run["outcomeValidation"] = copy.deepcopy(validation)
                 run["_state"].setdefault("completionCheck", {})["businessOutcomeVerified"] = bool(
                     validation.get("businessOutcomeVerified")
                 )
-                if (validation.get("validatorId") == "fixture-outcome-validator.v1"
-                        and validation.get("status") == "contradicted"):
+                simulation_validation_failed = (
+                    validation.get("validatorId") == simulation_lab.OUTCOME_VALIDATOR_ID
+                    and (
+                        validation.get("status") != "satisfied"
+                        or validation.get("businessOutcomeVerified") is not True
+                    )
+                )
+                fixture_validation_failed = (
+                    validation.get("validatorId") == "fixture-outcome-validator.v1"
+                    and validation.get("status") == "contradicted"
+                )
+                if simulation_validation_failed or fixture_validation_failed:
+                    unknown_outcome = validation.get("status") == "unknown"
                     run["_state"].update(status="failed", error={
-                        "code": "OUTCOME_VALIDATION_FAILED",
-                        "message": "A trusted outcome check contradicted the proposed business result.",
+                        "code": (
+                            "OUTCOME_VALIDATION_UNAVAILABLE"
+                            if unknown_outcome else "OUTCOME_VALIDATION_FAILED"
+                        ),
+                        "message": (
+                            "The authoritative outcome could not be verified, so downstream work was stopped."
+                            if unknown_outcome else
+                            "A trusted outcome check contradicted the proposed business result."
+                        ),
                     })
                     self.factory_event(
-                        run, "outcome.contradicted",
-                        "The trusted fixture validator contradicted the proposed result; completion was rejected.",
+                        run, "outcome.unknown" if unknown_outcome else "outcome.contradicted",
+                        "The trusted outcome validator did not establish success; completion was rejected.",
                         validatorId=validation.get("validatorId"),
                     )
             self.factory_event(run, "agent.decision", "Validated one new decision against the pinned capability contracts.", status=run["_state"].get("status"))
@@ -3096,7 +3823,14 @@ class Store:
                         getattr(exc, "message", "An external source fact could not be authoritatively rechecked."),
                     ) from exc
             else:
-                observed = factory_fixtures.execute_read(source["toolId"], copy.deepcopy(source["arguments"]))
+                try:
+                    observed = self.capability_runtime.recheck(
+                        source, {"runId": claimed["id"], "purpose": "precondition-recheck"}
+                    ).output
+                except CapabilityAdapterError as exc:
+                    raise factory_engine.AgentError(
+                        exc.code, exc.message,
+                    ) from exc
             if digest(observed) != expected_hash:
                 raise factory_engine.AgentError(
                     "BUSINESS_PRECONDITION_CHANGED",
@@ -3135,19 +3869,42 @@ class Store:
                         "message": "Connection authority changed while the read was running; the stale provider result was discarded.",
                     }
             if failure:
-                if effect and effect.get("state") == "dispatched" and not run.get("_suppressWrites"):
+                uncertain_write = bool(
+                    effect and effect.get("state") == "dispatched"
+                    and not run.get("_suppressWrites")
+                    and failure.get("outcomeUnknown", False)
+                )
+                if uncertain_write:
+                    if failure.get("receipt"):
+                        effect["failureReceipt"] = copy.deepcopy(failure["receipt"])
                     self._transition_effect(effect, "unknown", {"error": failure["code"]})
                     run["_state"].update(status="stopped", error={"code": "WRITE_NEEDS_RECONCILIATION", "message": "The adaptive write did not return a verified receipt; reconcile its stable operation before resuming."})
                 else:
+                    if (effect and effect.get("state") in {"prepared", "dispatched"}
+                            and not run.get("_suppressWrites")):
+                        effect["failure"] = {
+                            key: copy.deepcopy(failure.get(key))
+                            for key in ("code", "message", "retryable", "condition", "outcomeUnknown")
+                            if failure.get(key) is not None
+                        }
+                        if failure.get("receipt"):
+                            effect["failureReceipt"] = copy.deepcopy(failure["receipt"])
+                        self._transition_effect(effect, "failed", {"error": failure["code"]})
                     try:
                         run["_state"] = factory_engine.record_tool_error(
                             run["_compiled"], run["_state"], failure["code"],
-                            failure["message"], retryable=True,
-                            outcome_unknown=False,
+                            failure["message"], retryable=bool(failure.get("retryable", True)),
+                            condition=failure.get("condition"),
+                            outcome_unknown=bool(failure.get("outcomeUnknown", False)),
                         )
                     except factory_engine.AgentError:
                         run["_state"].update(status="failed", error=failure)
-                self.factory_event(run, "tool.failed", failure["message"], code=failure["code"])
+                self.factory_event(
+                    run, "tool.failed", failure["message"], code=failure["code"],
+                    retryable=bool(failure.get("retryable")),
+                    outcomeUnknown=bool(failure.get("outcomeUnknown")),
+                    receipt=copy.deepcopy(failure.get("receipt") or {}),
+                )
             else:
                 try:
                     next_state = factory_engine.record_tool_result(run["_compiled"], run["_state"], output)
@@ -3168,8 +3925,11 @@ class Store:
                                 "authorityChangedAfterDispatch": authority_stale,
                             }
                         else:
+                            local_receipt = copy.deepcopy(execution.get("receipt", {})) if isinstance(execution, dict) else {}
                             effect["executionReceipt"] = {
-                                "provider": "local-fixture", "externalEffect": False,
+                                **local_receipt,
+                                "provider": execution.get("provider", "in-process-adapter") if isinstance(execution, dict) else "in-process-adapter",
+                                "externalEffect": bool(execution.get("externalEffect")) if isinstance(execution, dict) else False,
                                 "verifiedAt": now(), "resultHash": digest(output),
                             }
                         self._transition_effect(effect, "acknowledged", {"resultHash": digest(output)})
@@ -3247,7 +4007,13 @@ class Store:
             if lease["kind"] == "model":
                 try:
                     if claimed["mode"] == "fixture":
-                        decision = factory_fixtures.fixture_decision(claimed["_compiled"], copy.deepcopy(claimed["_state"]), claimed.get("scenario"))
+                        if claimed.get("specId") == simulation_lab.INCIDENT_COMMANDER_ID:
+                            decision = simulation_lab.fixture_decision(
+                                claimed["_compiled"], copy.deepcopy(claimed["_state"]),
+                                claimed.get("scenario"),
+                            )
+                        else:
+                            decision = factory_fixtures.fixture_decision(claimed["_compiled"], copy.deepcopy(claimed["_state"]), claimed.get("scenario"))
                         next_state = factory_engine.apply_decision(
                             claimed["_compiled"], claimed["_state"], decision,
                             provider_label="scripted-fixture",
@@ -3280,8 +4046,18 @@ class Store:
                         self._recheck_adaptive_sources(claimed, action)
                     except factory_engine.AgentError as exc:
                         self.atomic(
-                            self._finish_agent_model, ident, token, revision, None,
-                            {"code": exc.code, "message": exc.message},
+                            self._finish_agent_tool, ident, token, revision,
+                            action["actionHash"], None,
+                            {
+                                "code": exc.code, "message": exc.message,
+                                "retryable": False, "outcomeUnknown": False,
+                                "condition": (
+                                    "changedBusinessState"
+                                    if exc.code == "BUSINESS_PRECONDITION_CHANGED"
+                                    else None
+                                ),
+                                "receipt": {},
+                            },
                         )
                         with self.lock:
                             return self.public_agent_run(self.get("agent_runs", ident), user)
@@ -3316,16 +4092,35 @@ class Store:
                                     "provider": dispatch["external"]["connection"].get("provider"),
                                     "receipt": copy.deepcopy(dict(external_result.receipt)),
                                 }
-                            elif action["effect"] == "write":
-                                output = factory_fixtures.prepare_write_result(action["toolId"], action["arguments"], action["operationKey"])
-                                if claimed.get("_suppressWrites"):
-                                    output = {**output, "status": "simulated", "capturedLocally": False,
-                                              "recordId": "SIM-" + str(output.get("recordId", ""))}
                             else:
-                                output = factory_fixtures.execute_read(action["toolId"], action["arguments"])
+                                local_result = self.capability_runtime.execute(
+                                    action, {"runId": ident, "purpose": "dispatch",
+                                             "suppressWrite": bool(claimed.get("_suppressWrites"))}
+                                )
+                                output = copy.deepcopy(local_result.output)
+                                execution = {
+                                    "external": False,
+                                    "provider": local_result.provider,
+                                    "externalEffect": local_result.external_effect,
+                                    "receipt": copy.deepcopy(local_result.receipt),
+                                }
+                            adapter_id = action.get("actionTarget", {}).get("adapterBinding", {}).get("adapterId", "")
+                            if (action["effect"] == "write" and claimed.get("_suppressWrites")
+                                    and isinstance(adapter_id, str) and adapter_id.startswith("local-fixture.")):
+                                output = {**output, "status": "simulated", "capturedLocally": False,
+                                          "recordId": "SIM-" + str(output.get("recordId", ""))}
                         except Exception as exc:
-                            failure = {"code": getattr(exc, "code", "AGENT_TOOL_ERROR"),
-                                       "message": exc.message if isinstance(exc, (factory_engine.AgentError, integrations.IntegrationError)) else "The trusted capability adapter failed."}
+                            failure_code = getattr(exc, "code", "AGENT_TOOL_ERROR")
+                            suppressed_write = bool(
+                                dispatch.get("suppressed")
+                                and failure_code == "EXTERNAL_WRITE_SUPPRESSED"
+                            )
+                            failure = {"code": failure_code,
+                                       "message": exc.message if isinstance(exc, (factory_engine.AgentError, integrations.IntegrationError, CapabilityAdapterError)) else "The trusted capability adapter failed.",
+                                       "retryable": suppressed_write or bool(getattr(exc, "retryable", False)),
+                                       "outcomeUnknown": False if suppressed_write else bool(getattr(exc, "outcome_unknown", action.get("effect") == "write")),
+                                       "condition": getattr(exc, "condition", None),
+                                       "receipt": copy.deepcopy(getattr(exc, "receipt", {}) or {})}
                     if not self.stop.is_set():
                         applied = self.atomic(
                             self._finish_agent_tool, ident, token, revision,
@@ -4936,8 +5731,9 @@ class Store:
 
     def _transition_effect(self, effect, state, detail=None):
         allowed = {
-            "prepared": {"dispatched"},
-            "dispatched": {"acknowledged", "unknown", "reconciled"},
+            "prepared": {"dispatched", "failed"},
+            "dispatched": {"acknowledged", "failed", "unknown", "reconciled"},
+            "failed": set(),
             "unknown": {"reconciled"},
             "reconciled": {"acknowledged"},
             "acknowledged": set(),
@@ -5373,7 +6169,6 @@ class Store:
         }
         gate_ids = []
         for parent in sorted(item for item in direct_parents if isinstance(item, str)):
-            parent_definition = definitions.get(parent, {})
             try:
                 parent_agent = self._pinned_agent(run["_snapshot"], parent)
             except APIError:
@@ -7007,6 +7802,24 @@ class Handler(BaseHTTPRequestHandler):
             nonlocal user, csrf, download
             if path == "/api/bootstrap" and self.command == "GET":
                 return self.store.bootstrap(user, csrf)
+            if path == "/api/simulation-lab" and self.command == "GET":
+                return self.store.simulation_lab_bundle(user)
+            if path == "/api/simulation-lab/worlds" and self.command == "POST":
+                return self.store.create_simulation_world(body, user)
+            simulation_match = re.fullmatch(
+                r"/api/simulation-lab/worlds/([A-Za-z0-9_-]+)(?:/(reset|faults|start))?",
+                path,
+            )
+            if simulation_match:
+                ident, action = simulation_match.groups()
+                if not action and self.command == "GET":
+                    return self.store.get_simulation_world(ident, user)
+                if action == "reset" and self.command == "POST":
+                    return self.store.reset_simulation_world(ident, user)
+                if action == "faults" and self.command == "POST":
+                    return self.store.set_simulation_fault(ident, body, user)
+                if action == "start" and self.command == "POST":
+                    return self.store.start_simulation_world(ident, user)
             if path == "/api/integration-catalog" and self.command == "GET":
                 return self.store.integration_catalog()
             if path == "/api/integrations/openapi/inspect" and self.command == "POST":

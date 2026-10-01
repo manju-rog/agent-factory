@@ -1,13 +1,15 @@
 # Axiom
 
-Axiom 2.0.0 is a runnable local workflow application using SQLite schema 11. It combines an original workflow authoring interface with an adaptive Agent Factory, reusable version-pinned Goal Agent nodes, typed graph proposals, structured validation, role-controlled execution, persisted runs and write effects, bounded task attachments, a governed external-connection gateway, an approval inbox, evidence inspection, and isolated rehearsals. It remains a local reference application rather than a production deployment.
+Axiom 2.1.0 is a runnable local workflow application using SQLite schema 12. It combines an original workflow authoring interface with an adaptive Agent Factory, reusable version-pinned Goal Agent nodes, typed graph proposals, structured validation, role-controlled execution, persisted runs and write effects, bounded task attachments, a governed external-connection gateway, an approval inbox, evidence inspection, isolated rehearsals, and the stateful Atlas Checkout Simulation Lab. It remains a local reference application rather than a production deployment.
 
 ## Run
 
 Use Python 3.10 or newer. The reference application uses Python's standard library and does not require a package install.
 
+From the repository root:
+
 ```bash
-python3 server.py --port 8765
+cd app && python3 server.py
 ```
 
 Open [Axiom locally](http://127.0.0.1:8765). The server binds to localhost. Its SQLite database persists local work; the exact database argument and defaults are documented by `python3 server.py --help`.
@@ -34,9 +36,29 @@ Use the moon/sun button in the header to switch between day and night mode. The 
 
 The bundled service, invoice, and access variations use deterministic scripted decisions through the same runtime validation and persistence loop. They are fixtures, not AI. They establish runtime behavior but not live-model planning quality or external delivery.
 
+## Run the Atlas Checkout Simulation Lab
+
+Open **Simulation Lab** after starting the local server. The flagship **Atlas Checkout SEV-1 · Adaptive Incident Command** workflow keeps one mission and authority boundary while controlled evidence changes what its Incident Commander does next.
+
+The seven canonical profiles are:
+
+1. `fresh-incident` — **Fresh checkout regression**: no active Jira incident exists.
+2. `existing-incident` — **Existing incident reuse**: the matching Jira incident must be reused.
+3. `missing-owner` — **Missing service ownership**: the agent requests the owner and approved incident channel instead of inventing them.
+4. `confluence-unavailable` — **Runbook service unavailable**: the runbook read returns a controlled retryable fault and the result retains unresolved risk.
+5. `slack-rate-limit` — **Slack rate limit and retry**: the first post returns a deterministic 429 with a 30-second retry hint; one bounded retry can succeed without creating a duplicate message.
+6. `jira-lost-ack` — **Jira acknowledgement lost**: Jira commits once but its response is lost, so the operation is reconciled by stable operation key.
+7. `changed-flag-version` — **Feature flag changes during approval**: a scheduled version change makes the reviewed mitigation stale and prevents that old action from committing.
+
+Each world is isolated and persisted in SQLite with a pinned profile hash, generation, deterministic virtual clock, strict in-process capability contracts, stable operation ledger, and hash-chained append-only events anchored to current world state. The scripted fixture chooses its next action only from recorded observations and faults; it does not inspect the selected profile ID to pick a hidden path.
+
+Consequential writes use the normal prepare → exact approval → authoritative recheck → commit boundary. Approval binds one immutable action hash and operation identity, not the whole run. Unknown write outcomes are reconciled before retry. A reset is blocked while a bound workflow, agent session, or unresolved effect remains active; after settlement it creates the next generation and retains prior-generation event and operation audit records.
+
+All provider labels in this workspace are simulated. The sandbox sets `externalNetwork: false` and `externalEffects: false`; it uses no provider credentials and sends nothing to real Metrics, Jira, Confluence, Slack, deployment, catalog, or feature-flag systems. Configuring the separate Connections workspace does not convert the Simulation Lab into a live-provider run. See [the complete Simulation Lab guide](../docs/SIMULATION_LAB.md).
+
 ## Connect an external service
 
-Open **Connections** as the administrator. The Axiom 2.0 catalog exposes bounded presets for Slack, Jira Cloud, Confluence Cloud, and an outbound JSON webhook. For each connection:
+Open **Connections** as the administrator. The Axiom 2.1 catalog exposes bounded presets for Slack, Jira Cloud, Confluence Cloud, and an outbound JSON webhook. For each connection:
 
 1. Select only the reviewed read/write operations needed for that connection. Axiom derives their declared scopes and does not accept executable operation definitions from the browser.
 2. Enter the exact approved API base URL. Native provider credentials are pinned to Slack's API origin or the corresponding Atlassian Cloud product path; redirects and destination changes are rejected.
@@ -56,20 +78,22 @@ These paths can execute outbound requests when an administrator supplies valid s
 6. Inspect the completed local ticket, effect ledger, evidence receipt, and redacted hash-sealed run export. Try a lost-acknowledgement scenario, reconcile the retained write, and recover the eligible failed step.
 7. Open Connections as an administrator to configure a bounded external preset or test, revoke, and restore an existing authority. Authority changes increment the connection generation; prepared actions recheck it before approval and dispatch.
 8. Restart the server with the same database and inspect the retained templates, runs, decisions, attachments, connections, and fixture tickets. Environment credential values are intentionally not stored in SQLite and must still be present in the server process.
+9. Open Simulation Lab, compare the fresh and existing-incident worlds, approve only the exact prepared writes, inspect lost-acknowledgement reconciliation and stale-version rejection, then reset the settled world to a new generation. No step in this sandbox sends an external request.
 
 The exact supported endpoints and data shapes are in CONTRACT.md. Tests and the supplied verification report state which behaviors have been exercised.
 
 ## Included demonstration workflows
 
-The database begins with six published workflows: the original CSR resolution workflow plus five presentation-ready demonstrations.
+The database begins with seven published workflows: the original CSR resolution workflow, five presentation-ready cross-domain demonstrations, and the Atlas Checkout flagship.
 
 1. **Payment dispute investigation** — checks identity and payment settlement evidence, routes higher-value disputes, and creates one governed local dispute record.
 2. **Employee access governance** — checks employment, manager intent, role conflicts, and license exposure, then creates one time-bound local access record.
 3. **Production incident and change control** — combines telemetry and customer impact, reviews a bounded mitigation, and creates one local change record.
 4. **Vendor risk and procurement onboarding** — checks security and corporate evidence, applies enhanced review to material contracts, and creates one local procurement record.
 5. **Insurance claim adjudication** — checks coverage and fraud evidence, routes higher-value claims, and creates one local adjudication record.
+6. **Atlas Checkout SEV-1 · Adaptive Incident Command** — runs a reusable Goal Agent against one isolated, stateful incident world, adapts to observed provider-shaped evidence, pauses for exact write approval, reconciles uncertain local effects, and validates the final authoritative world state.
 
-Each demonstration has 14 steps and 16 connections. It validates typed required input, runs checks in parallel, tests both condition routes, requires approval of the complete action record, creates a simulated local record, and produces a receipt. The stored release pins and hashes its fixture manifest and defaults. If a built-in seed ID is missing at startup, Axiom restores it without replacing a workflow that already exists under that ID.
+Each of the five cross-domain demonstrations has 14 steps and 16 connections. It validates typed required input, runs checks in parallel, tests both condition routes, requires approval of the complete action record, creates a simulated local record, and produces a receipt. The Atlas flagship instead has one version-pinned Goal Agent followed by evidence-receipt and completion nodes. Stored releases pin and hash their definitions. If a built-in seed ID is missing at startup, Axiom restores it without replacing a workflow that already exists under that ID.
 
 These demonstrations use deterministic local fixtures. They look and behave like realistic governed workflows, but they do not contact external payment, identity, monitoring, procurement, insurance, Jira, or cloud services.
 
@@ -79,6 +103,9 @@ These demonstrations use deterministic local fixtures. They look and behave like
 - `workflow.py` validates and compiles the bounded structured DAG. Published snapshots pin compiler/interpreter versions and the compiled plan; the local runtime handles condition selection, skipped branches, joins, outcomes, manual gates, and approvals.
 - `evidence.py` validates source snapshots, excerpt bounds, transformations, claims and conflicts, decision packets, receipts, access inheritance, and redacted access-filtered export. The run evidence endpoint builds a local evidence graph from recorded run data.
 - SQLite stores ordered migration markers, actor-scoped idempotent task-start records, bounded attachment records, mutable connection records, and a write-effect ledger. Write nodes are prepared before dispatch, retain operation identity, reject changed fingerprints or connection generations, and reconcile an exact matching local ticket before retry.
+- Schema 12 adds persisted Simulation Lab worlds, generation-aware event history, and stable simulated operation records. The Atlas world validates its profile pin, sandbox boundary, virtual clock, operation hashes, hash-chained events, and final state anchor before every capability transition.
+- `simulation_lab.py` supplies the seven deterministic profiles, strict in-process capability contracts, virtual clock and scheduled changes, provider-shaped receipts and faults, observation-driven Incident Commander fixture, duplicate-safe operation ledger, reconciliation, and authoritative outcome validator. Every simulated receipt declares zero external effect.
+- `capability_runtime.py` dispatches only explicitly registered in-process adapters and keeps ordinary execution distinct from reconciliation; unknown or non-local bindings fail closed.
 - Template input schemas and built-in agent input/output schemas drive server-side task validation and mapping validation. Mappings must reference a declared compatible field that is available on every path; the mapping dialog exposes the same nested, type-compatible choices.
 - Local task attachments are limited to five UTF-8 JSON, text, or CSV files, 256 KiB each and 512 KiB total. Public run/evidence views expose metadata and SHA-256 only. This is bounded local ingestion, not malware scanning or production object storage.
 - Run exports are authorized, audited, schema-versioned, recursively redact secret-looking fields and raw `externalContent`, and include a canonical SHA-256 `manifestHash`. That hash detects modification; it is not an identity-backed digital signature.
@@ -121,6 +148,8 @@ Use an approved endpoint and verify its compatibility, model behavior, pricing m
 | agent_factory.py | Shared adaptive decision loop, strict specifications and capability contracts, context projection, budgets, prepared actions, clarification, provider adapter, and completion checks. |
 | integrations.py | External connection contracts, reviewed provider presets, exact request preparation, egress checks, strict adapters, OpenAPI inspection primitives, and MCP protocol interfaces. |
 | factory_fixtures.py | Labeled local service, invoice, access, and artifact capabilities, deterministic decisions, controlled variations, and domain-owned outcome validators. |
+| simulation_lab.py | Stateful Atlas Checkout worlds, seven evidence profiles, virtual time, simulated provider capabilities and faults, operation reconciliation, fixture decisions, and authoritative outcome validation. |
+| capability_runtime.py | Trusted registry and dispatch boundary for named in-process capability adapters and explicit reconciliation. |
 | governance.py | Blocks, template finding, impact analysis, bounded teams, and release decisions. |
 | public/index.html | Application entry. |
 | public/styles.css | Original application design system and responsive layout. |
@@ -135,7 +164,7 @@ Run tests from the application directory:
 python3 -m unittest discover -s tests -v
 ```
 
-The Axiom 2.0 discovery gate passed **287/287 tests in 34.162 seconds** on 2026-09-25. The completed Axiom 1.9 gate and historical 113-test factory source checkpoint remain separate dated baselines. Current commands and evidence are maintained in `../research/QA_NOTES.md`; focused adaptive-runtime evidence is in `../factory/Verification.md`.
+The Axiom 2.1 discovery gate passed **322/322 tests in 71.386 seconds** on 2026-10-01. This includes 16 focused Simulation Lab domain tests plus persistence, HTTP, workflow-child, exact-approval, restart, reconciliation, and capability-runtime coverage. The completed Axiom 2.0 and Axiom 1.9 gates and the historical 113-test factory source checkpoint remain separate dated baselines. Current commands and evidence are maintained in `../research/QA_NOTES.md`; focused adaptive-runtime evidence is in `../factory/Verification.md`.
 
 To regenerate the offline interface preview from recorded fixture runs:
 
@@ -161,6 +190,6 @@ The same-date headed-browser builder journey created and saved **Workflow Builde
 
 ## Product boundary
 
-This reference supports local fixture execution, adaptive Goal Agent child sessions, a bounded structured DAG, and governed outbound calls under one SQLite-backed scheduler. It is not a multi-tenant or distributed production service. Reminder `deliveryStatus: sent` means delivered to the persisted local capture outbox and named local role recipients; no email or external notification is sent. Slack, Jira Cloud, Confluence Cloud, and webhook presets require administrator-supplied server credentials and live sandbox validation; none was verified against a tenant for this release. OAuth lifecycle, MCP hosting, generic OpenAPI activation, inbound webhooks, automatic external retries, external reconciliation, real CSR/OCI/finance/directory services, live-model evaluations, corporate OIDC/directory grants, tenant isolation, managed secret storage, production mail, distributed workers/failover, observability and load validation, production object storage and malware scanning, retention operations, identity-backed export signing, and operational deployment remain integration gates. TeamRecipe planning exists as a validated domain service, not a model-driven runtime or user-facing orchestration workflow.
+This reference supports local fixture execution, adaptive Goal Agent child sessions, a bounded structured DAG, governed outbound calls, and the stateful Atlas Checkout sandbox under one SQLite-backed scheduler. It is not a multi-tenant or distributed production service. Simulation Lab provider mirrors are always in-process, credential-free, and zero-external-effect; live providers are not part of that sandbox. Reminder `deliveryStatus: sent` means delivered to the persisted local capture outbox and named local role recipients; no email or external notification is sent. Slack, Jira Cloud, Confluence Cloud, and webhook presets require administrator-supplied server credentials and live sandbox validation; none was verified against a tenant for this release. OAuth lifecycle, MCP hosting, generic OpenAPI activation, inbound webhooks, automatic external retries, external reconciliation, real CSR/OCI/finance/directory services, live-model evaluations, corporate OIDC/directory grants, tenant isolation, managed secret storage, production mail, distributed workers/failover, observability and load validation, production object storage and malware scanning, retention operations, identity-backed export signing, and operational deployment remain integration gates. TeamRecipe planning exists as a validated domain service, not a model-driven runtime or user-facing orchestration workflow.
 
 The source is supplied for continued development with no embedded paid workflow platform. The application has no required third-party JavaScript dependency or remote asset. Python and any optional service you configure retain their own terms.
