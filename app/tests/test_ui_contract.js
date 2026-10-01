@@ -172,6 +172,9 @@ async function main() {
   assert.match(styles, /@media\(max-width:880px\)[\s\S]*?\.studio-header-actions \.btn\.save-btn\{display:inline-flex\}/,
     'Saving a workflow remains available on tablet and mobile layouts.');
   assert.match(styles, /:root\[data-theme="dark"\] \.canvas-pane/, 'Night mode covers the workflow canvas and not only the page shell.');
+  assert.match(styles, /\.btn\.action-role-handoff:hover\{/, 'Reviewer handoff actions expose a visible hover state.');
+  assert.match(styles, /\.btn\.action-role-handoff:focus-visible\{/, 'Reviewer handoff actions expose a keyboard focus state.');
+  assert.match(styles, /\.btn\.action-denied\[aria-disabled="true"\]:hover\{/, 'Denied controls can reveal their explanation on hover without becoming executable.');
 
   evaluate(`globalThis.__builderBefore={template:state.template,user:state.data.user,dirty:state.dirty,undo:state.undo,redo:state.redo,
     selected:state.selected,panel:state.panel,palette:state.palette,pendingPlacement:state.pendingPlacement,contextMenu:state.contextMenu,
@@ -486,12 +489,57 @@ async function main() {
       approvalReminder:tag('data-run-remind',approval.nodeId),execute:tag('data-run-execute',manual.nodeId),
       manualReminder:tag('data-run-remind',manual.nodeId),cancel:tag('data-action','cancel-run'),terminalHasCancel:terminalHtml.includes('data-action="cancel-run"')});})()`));
   for (const action of ['approve','reject','approvalReminder','cancel']) {
-    assert.match(lifecyclePolicy[action], /disabled/, `${action} must follow the server's denied action policy.`);
+    assert.match(lifecyclePolicy[action], /aria-disabled="true"/, `${action} must expose the server's denied action policy.`);
+    assert.match(lifecyclePolicy[action], /data-action-denied=/, `${action} must remain focusable and explain why it is denied.`);
+    assert.doesNotMatch(lifecyclePolicy[action], /\sdisabled(?:\s|>)/, `${action} must not become an inert native-disabled control.`);
   }
   for (const action of ['execute','manualReminder']) {
-    assert.ok(!lifecyclePolicy[action].includes('disabled'), `${action} must follow the server's allowed action policy.`);
+    assert.doesNotMatch(lifecyclePolicy[action], /aria-disabled|data-action-denied|\sdisabled(?:\s|>)/, `${action} must follow the server's allowed action policy.`);
   }
   assert.equal(lifecyclePolicy.terminalHasCancel, false, 'Terminal failed runs do not expose a cancellation action the server rejects.');
+  const approvalHandoff = JSON.parse(evaluate(`(()=>{const originalRun=state.run,originalUser=state.data.user,run=clone(state.data.runs[0]),approval=run.nodes[0];
+    state.data.user=state.data.users.find(user=>user.role==='admin');run.status='waiting_approval';approval.status='waiting_approval';
+    run.actionPolicy=[{action:'approve',nodeId:approval.nodeId,allowed:false,reason:'Reviewer role required.'},
+      {action:'reject',nodeId:approval.nodeId,allowed:false,reason:'Reviewer role required.'},
+      {action:'remind',nodeId:approval.nodeId,allowed:true,reason:'Eligible to capture a reminder.'},
+      {action:'cancel',nodeId:null,allowed:true,reason:'Initiator may cancel.'}];
+    state.run=run;const html=runDetail(),tag=html.match(new RegExp('<button[^>]*data-run-approve="'+approval.nodeId+'"[^>]*>'))?.[0]||'';
+    state.run=originalRun;state.data.user=originalUser;return JSON.stringify({tag,hasReason:html.includes('Reviewer role required.'),hasInstruction:html.includes('switch to Reviewer and continue to the required review')});})()`));
+  assert.match(approvalHandoff.tag, /data-role-handoff="reviewer"/, 'A denied approval offers an explicit reviewer-account handoff.');
+  assert.match(approvalHandoff.tag, /data-intended-action="approve"/, 'The handoff retains the exact requested action.');
+  assert.match(approvalHandoff.tag, /data-action-node-id=/, 'The handoff remains scoped to the waiting node.');
+  assert.match(approvalHandoff.tag, /action-role-handoff/, 'The reviewer handoff has an interactive visual state.');
+  assert.doesNotMatch(approvalHandoff.tag, /\sdisabled(?:\s|>)/, 'The reviewer handoff is clickable instead of natively disabled.');
+  assert.equal(approvalHandoff.hasReason, true, 'The server denial reason is visible beside the workflow action.');
+  assert.equal(approvalHandoff.hasInstruction, true, 'The workflow explains that approval still continues to a review step.');
+
+  const factoryHandoff = JSON.parse(evaluate(`(()=>{const originalFactory=state.factory,originalUser=state.data.user;
+    state.data.user=state.data.users.find(user=>user.role==='admin');state.factory={run:{id:'factory-approval',status:'awaiting_approval',allowedActions:[]}};
+    const denied=factoryPendingAction({toolId:'jira.issues.create',actionHash:'${'c'.repeat(64)}',contentHash:'${'c'.repeat(64)}',arguments:{summary:'Prepared incident'}});
+    state.data.user=state.data.users.find(user=>user.role==='reviewer');state.factory.run.allowedActions=['approve','reject'];
+    const allowed=factoryPendingAction({toolId:'jira.issues.create',actionHash:'${'c'.repeat(64)}',contentHash:'${'c'.repeat(64)}',arguments:{summary:'Prepared incident'}});
+    state.factory=originalFactory;state.data.user=originalUser;return JSON.stringify({denied,allowed});})()`));
+  const factoryReviewDenied = openingTag(factoryHandoff.denied, 'data-action', 'factory-review-action');
+  assert.match(factoryReviewDenied, /data-role-handoff="reviewer"/, 'Factory exact-action review offers the same reviewer handoff.');
+  assert.doesNotMatch(factoryReviewDenied, /\sdisabled(?:\s|>)/, 'Factory reviewer handoff remains clickable.');
+  assert.match(factoryHandoff.denied, /Reviewer role required\./, 'Factory exact-action review visibly explains the denial.');
+  assert.match(factoryHandoff.denied, /inspect the exact action/, 'Factory handoff promises review, never automatic approval.');
+  const factoryReviewAllowed = openingTag(factoryHandoff.allowed, 'data-action', 'factory-review-action');
+  assert.doesNotMatch(factoryReviewAllowed, /aria-disabled|data-role-handoff|\sdisabled(?:\s|>)/, 'Server-authorized Factory approval opens directly for a reviewer.');
+  const factoryContinuation = JSON.parse(await evaluate(`(async()=>{const originalFactory=state.factory,originalCatalog=state.data.agentFactory,originalUser=state.data.user,originalRoute=state.route,
+      prepared={toolId:'jira.issues.create',actionHash:'${'f'.repeat(64)}',contentHash:'${'f'.repeat(64)}',arguments:{summary:'Factory handoff exact payload'}},
+      run={id:'factory-handoff-run',specId:'factory-handoff-spec',specName:'Factory handoff agent',status:'awaiting_approval',allowedActions:['approve','reject'],pendingAction:prepared};
+    state.data.user=state.data.users.find(user=>user.role==='admin');state.route='runs';state.data.agentFactory={specs:[],tools:[],runs:[run],scenarios:[],provider:{configured:false}};
+    state.factory=null;const f=factoryState();f.runs=[run];f.run=run;f.selectedRunId=run.id;f.loaded=true;
+    const element={dataset:{roleHandoff:'reviewer',intendedAction:'factory-review-action',action:'factory-review-action'},disabled:false,
+      setAttribute(){},removeAttribute(){}};await continueActionAsRole(element);
+    const result={role:state.data.user.role,runId:factoryState().run.id,status:factoryState().run.status,modal:document.querySelector('#modal-root').innerHTML};
+    closeModal();state.factory=originalFactory;state.data.agentFactory=originalCatalog;state.data.user=originalUser;state.route=originalRoute;return JSON.stringify(result);})()`));
+  assert.equal(factoryContinuation.role, 'reviewer', 'Factory action handoff changes to the required reviewer account.');
+  assert.equal(factoryContinuation.runId, 'factory-handoff-run', 'Factory action handoff reloads the exact same durable session.');
+  assert.equal(factoryContinuation.status, 'awaiting_approval', 'Factory role switching never approves the prepared action automatically.');
+  assert.match(factoryContinuation.modal, /Factory handoff exact payload/, 'The reloaded Factory review retains its exact payload.');
+  assert.match(factoryContinuation.modal, /data-factory-decision="approve"/, 'Factory approval still requires a separate explicit confirmation.');
   evaluate(`(()=>{const run=clone(state.data.runs[0]),node=run.nodes[0];node.status='waiting_approval';
     node.approvalPacket={actions:[{effectId:'effect-write-1',nodeId:'write',label:'Create work item',operationGeneration:1,
       actionTarget:{method:'create',resource:'jira-work-item',connectionId:'fixture-ticket'},
@@ -518,6 +566,22 @@ async function main() {
   evaluate(`(()=>{const node=state.run.nodes[0];decisionModal(node.nodeId,'reject');})()`);
   assert.match(inspect('#modal-root'), /id="decision-comment"[^>]*required[^>]*aria-required="true"/,
     'The rejection reason is exposed as required to browsers and assistive technology.');
+  const handoffContinuation = JSON.parse(await evaluate(`(async()=>{closeModal();const originalRun=state.run,originalRunId=state.runId,originalUser=state.data.user,originalRoute=state.route,
+      run=clone(state.data.runs[0]),node=run.nodes[0];
+    state.data.user=state.data.users.find(user=>user.role==='admin');state.route='runs';state.runId=run.id;state.run=run;run.status='waiting_approval';node.status='waiting_approval';
+    node.approvalPacket={actions:[{effectId:'effect-handoff-1',nodeId:node.nodeId,label:'Prepared handoff action',operationGeneration:1,
+      actionTarget:{method:'create',resource:'jira-work-item',connectionId:'fixture-ticket'},payload:{summary:'Handoff exact payload'},
+      actionFingerprint:'${'d'.repeat(64)}',approvalEnvelopeHash:'${'e'.repeat(64)}'}]};
+    run.actionPolicy=[{action:'approve',nodeId:node.nodeId,allowed:true,reason:'Reviewer may inspect this action.'}];
+    const element={dataset:{roleHandoff:'reviewer',intendedAction:'approve',actionNodeId:node.nodeId},disabled:false,
+      setAttribute(){},removeAttribute(){}};await continueActionAsRole(element);
+    const result={role:state.data.user.role,runId:state.run.id,status:state.run.nodes[0].status,modal:document.querySelector('#modal-root').innerHTML};
+    closeModal();state.run=originalRun;state.runId=originalRunId;state.data.user=originalUser;state.route=originalRoute;return JSON.stringify(result);})()`));
+  assert.equal(handoffContinuation.role, 'reviewer', 'The action handoff changes to the required local reviewer account.');
+  assert.equal(handoffContinuation.runId, data.runs[0].id, 'The handoff retains the exact workflow run.');
+  assert.equal(handoffContinuation.status, 'waiting_approval', 'Switching roles does not approve the action automatically.');
+  assert.match(handoffContinuation.modal, /Handoff exact payload/, 'The continued review shows the exact prepared payload.');
+  assert.match(handoffContinuation.modal, /data-confirm-decision="approve"/, 'The reviewer must still explicitly confirm the action.');
   evaluate('closeModal();state.run=null;');
 
   evaluate(`reminderModal({deliveryStatus:'sent',status:'captured',provider:'local-notification-capture',
