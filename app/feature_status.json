@@ -2,19 +2,25 @@
   "product": "Axiom",
   "scope": "local reference application",
   "verified_on": "2026-10-01",
-  "app_version": "2.1.0",
-  "schema_version": 12,
+  "app_version": "2.2.0",
+  "schema_version": 13,
   "builtin_contract_version": "1.3.0",
-  "python_tests": 322,
-  "verification_note": "The Axiom 2.1 discovery gate passed 322/322 tests in 71.386 seconds on 2026-10-01, including 16 focused Atlas Checkout Simulation Lab domain tests and integrated persistence, HTTP, workflow-child, approval, restart, reconciliation, reset, and capability-runtime coverage. The Simulation Lab is stateful and realistic but strictly local: all provider-shaped systems are simulated in-process with no external network and zero external effects. No live Slack, Jira Cloud, Confluence Cloud, webhook receiver, MCP server, observability, deployment, catalog, feature-flag, or arbitrary API tenant was used. Live-model quality, production identity/tenancy, distributed load/failover, and formal accessibility certification remain unverified production gates.",
+  "python_tests": 338,
+  "verification_note": "The Axiom 2.2 discovery gate passed 338/338 tests in 70.056 seconds on 2026-10-01, including 16 focused durable-scheduling tests, 16 focused Atlas Checkout Simulation Lab domain tests, and integrated persistence, HTTP, workflow-child, approval, restart, reconciliation, reset, and capability-runtime coverage. Scheduling is a single-process SQLite feature with exact release pins, timezone-aware recurrence, restart recovery, overlap protection, and idempotent starts; it is not a distributed or high-availability scheduler. The Simulation Lab remains strictly local with no external network and zero external effects. No live Slack, Jira Cloud, Confluence Cloud, webhook receiver, MCP server, observability, deployment, catalog, feature-flag, or arbitrary API tenant was used. Live-model quality, production identity/tenancy, distributed load/failover, and formal accessibility certification remain unverified production gates.",
   "machine_verification": {
     "current_release_gate": {
       "status": "passed",
-      "release": "2.1.0",
+      "release": "2.2.0",
       "verified_on": "2026-10-01",
-      "passed": 322,
-      "total": 322,
-      "seconds": 71.386
+      "passed": 338,
+      "total": 338,
+      "seconds": 70.056
+    },
+    "workflow_scheduling": {
+      "status": "passed",
+      "passed": 16,
+      "total": 16,
+      "scope": "One-time/hourly/daily/weekly recurrence, IANA time zones and DST, exact release pins, restart recovery, missed-occurrence coalescing, overlap protection, pause/resume/run-now/archive, revisions, roles, idempotency, and HTTP boundaries"
     },
     "simulation_lab_domain": {
       "status": "passed",
@@ -52,7 +58,7 @@
     "preview_ui_contracts": {
       "captures_passed": 2,
       "counts_per_capture": {
-        "route_renders": 28,
+        "route_renders": 32,
         "run_renders": 72,
         "inspector_renders": 7,
         "mapping_dialogs": 2,
@@ -157,6 +163,10 @@
     "local_durable_execution": {
       "status": "verified",
       "evidence_or_limit": "SQLite restart, pinned snapshots, failure isolation."
+    },
+    "durable_workflow_scheduling": {
+      "status": "verified",
+      "evidence_or_limit": "Schema 13 persists one-time, hourly, daily and weekly schedules with IANA timezone handling, exact workflow version/hash pins, optimistic revisions, definition generations, idempotent automatic and manual starts, overlap skipping, coalesced restart recovery, role-controlled pause/resume/run-now/edit/archive, visible errors and generated-run provenance. The 16 focused persistence and HTTP tests are included in the 338-test release gate. The server must remain running for dispatch; distributed workers, high availability, external clocks and production load/failover evidence are not present. See ../docs/SCHEDULING.md."
     },
     "role_controlled_decisions": {
       "status": "verified",
@@ -284,7 +294,7 @@
     },
     "browser_visual_accessibility_checks": {
       "status": "implemented",
-      "evidence_or_limit": "The headed-browser record now covers custom specification activation, Goal Agent workflow placement, observation-dependent and clarification paths, separate exact-action review, the schema-11 Connections catalog, safe non-executable OpenAPI inspection, truthful unavailable-provider controls, workflow creation, persisted theme, role-aware node actions, and responsive Save access. Machine syntax and Node VM contracts remain distinct evidence. Full WCAG, screen-reader, live-provider, and broad cross-browser certification remain separate work."
+      "evidence_or_limit": "The headed-browser record now covers custom specification activation, Goal Agent workflow placement, observation-dependent and clarification paths, separate exact-action review, the schema-11 Connections catalog, safe non-executable OpenAPI inspection, truthful unavailable-provider controls, workflow creation, persisted theme, role-aware node actions, responsive Save access, and the schema-13 schedule create/pause/resume/run-now/provenance journey in both light and night modes. Machine syntax and Node VM contracts remain distinct evidence. Full WCAG, screen-reader, mobile, live-provider, and broad cross-browser certification remain separate work."
     }
   }
 }

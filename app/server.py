@@ -37,6 +37,7 @@ from capability_runtime import (CapabilityAdapterError, CapabilityExecution,
                                 CapabilityRuntime, LocalFixtureAdapter)
 import factory_fixtures
 import integrations
+import scheduling
 import simulation_lab
 
 from domain import (RuleError, SchemaDefinitionError, assert_supported_schema, content_hash,
@@ -51,8 +52,8 @@ from scenarios import (SCENARIO_SCHEMA_VERSION, ScenarioError,
 
 
 ROOT = Path(__file__).resolve().parent
-APP_VERSION = "2.1.0"
-SCHEMA_VERSION = 12
+APP_VERSION = "2.2.0"
+SCHEMA_VERSION = 13
 BUILTIN_CONTRACT_VERSION = "1.3.0"
 USERS = [
     {"id": "author", "name": "Alex Chen", "role": "admin"},
@@ -465,7 +466,7 @@ PERSISTED_JSON_TABLES = (
     "plans", "experiments", "audit", "outbox", "connections",
     "connection_health", "artifacts", "run_requests",
     "agent_specs", "agent_runs", "simulation_worlds",
-    "simulation_events", "simulation_operations",
+    "simulation_events", "simulation_operations", "schedules",
 )
 
 
@@ -1019,6 +1020,7 @@ class Store:
                 CREATE TABLE IF NOT EXISTS run_requests (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS agent_specs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS agent_runs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS schedules (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS simulation_worlds (
                     id TEXT PRIMARY KEY,
                     data TEXT NOT NULL
@@ -1448,6 +1450,7 @@ class Store:
             (10, "adaptive-goal-agent-specs-and-sessions"),
             (11, "external-connection-gateway"),
             (12, "stateful-enterprise-simulation-lab"),
+            (13, "durable-workflow-schedules"),
         )
         user_version = self.db.execute("PRAGMA user_version").fetchone()[0]
         recorded_version = self.db.execute(
@@ -1932,6 +1935,7 @@ class Store:
     def _loop(self):
         while not self.stop.wait(0.15):
             try:
+                self.dispatch_due_schedules()
                 self.tick()
             except Exception as exc:
                 # Runtime errors are logged without exposing credentials or input payloads.
@@ -2464,6 +2468,8 @@ class Store:
                 "modelConfigured": configured, "productionIdentity": False, "externalWrites": external_writes,
                 "simulation": True, "statefulSimulationLab": True,
                 "virtualClock": True, "faultInjection": True,
+                "workflowScheduling": True,
+                "scheduleFrequencies": ["once", "hourly", "daily", "weekly"],
                 "experiments": True, "graphSemantics": "bounded structured DAG",
                 "preparedActionApproval": True, "effectLedger": True,
                 "adaptiveGoalAgents": True, "agentFactory": True,
@@ -2494,6 +2500,7 @@ class Store:
         catalog = self.integration_catalog()
         return {"user": user, "users": USERS, "csrf": csrf, "agents": self.all("agents"),
                 "templates": templates, "runs": runs, "approvals": approvals,
+                "schedules": self.list_schedules(user),
                 "connections": self.public_connections(),
                 "connectionCatalog": catalog["providers"], "integrationCatalog": catalog,
                 "agentFactory": self.factory_bundle(user),
@@ -5045,9 +5052,9 @@ class Store:
             raise APIError(409, "PINNED_AGENT_CONTRACT_INVALID", "The pinned agent manifest is unavailable for this node.")
         return copy.deepcopy(manifest)
 
-    def _verified_release(self, template):
+    def _verified_release(self, template, version=None, expected_hash=None):
         versions = template.get("versions", [])
-        published_version = template.get("publishedVersion")
+        published_version = template.get("publishedVersion") if version is None else version
         if not versions or not published_version:
             raise APIError(409, "NOT_PUBLISHED", "Publish a reviewed version before fixture execution.")
         matching_releases = [item for item in versions
@@ -5062,6 +5069,14 @@ class Store:
                 or snapshot.get("version") != release.get("version")):
             raise APIError(409, "RELEASE_INTEGRITY_FAILED", "The published release metadata is inconsistent. Repair or republish it before execution.")
         stored_hash = release.get("hash")
+        if (expected_hash is not None
+                and (not isinstance(expected_hash, str)
+                     or not isinstance(stored_hash, str)
+                     or not secrets.compare_digest(expected_hash, stored_hash))):
+            raise APIError(
+                409, "SCHEDULE_RELEASE_CHANGED",
+                "The schedule's pinned workflow release no longer matches its stored hash.",
+            )
         try:
             hashes = template_hashes(self._release_hash_basis(snapshot))
             snapshot_hash = digest(snapshot)
@@ -5425,6 +5440,626 @@ class Store:
         self.audit(user, "plan.applied", ident, {"revision": updated["draftRevision"]})
         return updated
 
+    # ------------------------------------------------------------------
+    # Durable workflow schedules
+
+    _SCHEDULE_DEFINITION_FIELDS = {
+        "name", "templateId", "frequency", "localStart", "timezone",
+        "scenario", "input", "overlapPolicy",
+    }
+
+    def _schedule_release(self, template_id, version=None, release_hash=None, *,
+                          allow_archived=False):
+        template = self.get("templates", template_id)
+        if template.get("status") == "archived" and not allow_archived:
+            raise APIError(
+                409, "TEMPLATE_ARCHIVED",
+                "Restore this workflow before scheduling another run.",
+            )
+        release = self._verified_release(template, version, release_hash)
+        return template, release
+
+    def _validated_schedule_definition(self, body, *, update=False):
+        if not isinstance(body, dict):
+            raise APIError(400, "SCHEDULE_BODY_INVALID", "A schedule must be a JSON object.")
+        allowed = set(self._SCHEDULE_DEFINITION_FIELDS)
+        if update:
+            allowed.update({"expectedRevision", "inputMode"})
+        unknown = sorted(set(body) - allowed)
+        if unknown:
+            raise APIError(
+                400, "SCHEDULE_FIELDS_UNKNOWN",
+                "Remove unsupported schedule fields.", {"fields": unknown},
+            )
+        try:
+            encode(body)
+            normalized = scheduling.validate_definition(body)
+        except scheduling.ScheduleValidationError as exc:
+            raise APIError(422, exc.code, exc.message) from exc
+        except (TypeError, ValueError, RecursionError) as exc:
+            raise APIError(
+                400, "INVALID_JSON_VALUE",
+                "Schedule values must be finite, valid JSON values.",
+            ) from exc
+        template, release = self._schedule_release(normalized["templateId"])
+        if "input" not in body:
+            pinned_default = release["snapshot"].get("demoFixture", {}).get("defaultInput")
+            if isinstance(pinned_default, dict):
+                normalized["input"] = copy.deepcopy(pinned_default)
+            elif isinstance(template.get("exampleInput"), dict):
+                normalized["input"] = copy.deepcopy(template["exampleInput"])
+        input_issues = validate_instance(
+            release["snapshot"].get("inputSchema", DEFAULT_TASK_SCHEMA),
+            normalized["input"],
+        )
+        if input_issues:
+            raise APIError(
+                422, "INPUT_SCHEMA_INVALID",
+                "Scheduled input does not satisfy the published workflow contract.",
+                [item.as_dict() for item in input_issues],
+            )
+        return normalized, template, release
+
+    def _schedule_input_has_redaction(self, value, field_name="input"):
+        if self._is_sensitive_field_name(field_name):
+            return True
+        if isinstance(value, dict):
+            return any(
+                self._schedule_input_has_redaction(item, str(key))
+                for key, item in value.items()
+            )
+        if isinstance(value, list):
+            return any(
+                self._schedule_input_has_redaction(item, field_name)
+                for item in value
+            )
+        return False
+
+    def public_schedule(self, schedule, user):
+        public_fields = (
+            "id", "name", "templateId", "templateName", "templateVersion",
+            "releaseHash", "status", "frequency", "localStart", "timezone",
+            "nextRunAt", "lastRunAt", "lastRunId", "runCount", "missedCount",
+            "revision", "definitionGeneration", "scenario", "input", "overlapPolicy", "createdAt",
+            "updatedAt", "createdBy", "pausedAt", "completedAt", "archivedAt",
+            "lastError",
+        )
+        result = {
+            key: copy.deepcopy(schedule.get(key))
+            for key in public_fields if key in schedule
+        }
+        # `releaseHash` is the canonical API name; `templateHash` is retained
+        # as an explicit compatibility alias for clients built during preview.
+        result["templateHash"] = schedule.get("releaseHash")
+        result["definitionGeneration"] = schedule.get("definitionGeneration", 1)
+        result["runIds"] = list(schedule.get("_runIds", []))
+        result["inputRedacted"] = self._schedule_input_has_redaction(
+            schedule.get("input", {})
+        )
+        actions = []
+        policy = []
+        role = user.get("role")
+        status = schedule.get("status")
+
+        def declare(action, allowed, reason):
+            policy.append({"action": action, "allowed": bool(allowed), "reason": reason})
+            if allowed:
+                actions.append(action)
+
+        if status != "archived":
+            admin = role == "admin"
+            operator = role in {"admin", "operator"}
+            declare("edit", admin, "Administrator role is required." if not admin else "Administrator role is eligible.")
+            declare("archive", admin, "Administrator role is required." if not admin else "Administrator role is eligible.")
+            declare("run", operator, "Operator or administrator role is required." if not operator else "Operations role is eligible.")
+            if status == "active":
+                declare("pause", operator, "Operator or administrator role is required." if not operator else "Operations role is eligible.")
+            elif status == "paused":
+                declare("resume", operator, "Operator or administrator role is required." if not operator else "Operations role is eligible.")
+        result["allowedActions"] = actions
+        result["actionPolicy"] = policy
+        return self._redact_sensitive_value(result)
+
+    def list_schedules(self, user):
+        return [self.public_schedule(item, user) for item in self.all("schedules")]
+
+    def get_schedule(self, ident, user):
+        return self.public_schedule(self.get("schedules", ident), user)
+
+    def create_schedule(self, body, user):
+        require(user, {"admin"})
+        normalized, template, release = self._validated_schedule_definition(body)
+        stamp = now()
+        ident = uid("schedule")
+        schedule = {
+            "id": ident,
+            "name": normalized["name"],
+            "templateId": template["id"],
+            "templateName": release["snapshot"]["name"],
+            "templateVersion": release["version"],
+            "releaseHash": release["hash"],
+            "status": "active",
+            "frequency": normalized["frequency"],
+            "localStart": normalized["localStart"],
+            "timezone": normalized["timezone"],
+            "nextRunAt": normalized["firstRunAt"],
+            "lastRunAt": None,
+            "lastRunId": None,
+            "runCount": 0,
+            "missedCount": 0,
+            "revision": 1,
+            "definitionGeneration": 1,
+            "scenario": normalized["scenario"],
+            "input": copy.deepcopy(normalized["input"]),
+            "overlapPolicy": normalized["overlapPolicy"],
+            "createdAt": stamp,
+            "updatedAt": stamp,
+            "createdBy": user["id"],
+            "_nextIndex": 0,
+            "_runIds": [],
+            "_manualOperations": {},
+        }
+        self.put("schedules", schedule)
+        self.audit(user, "schedule.created", ident, {
+            "templateId": schedule["templateId"],
+            "templateVersion": schedule["templateVersion"],
+            "releaseHash": schedule["releaseHash"],
+            "templateHash": schedule["releaseHash"],
+            "frequency": schedule["frequency"],
+            "nextRunAt": schedule["nextRunAt"],
+        })
+        return self.public_schedule(schedule, user)
+
+    def update_schedule(self, ident, body, user):
+        require(user, {"admin"})
+        current = self.get("schedules", ident)
+        if current.get("status") == "archived":
+            raise APIError(409, "SCHEDULE_ARCHIVED", "An archived schedule cannot be edited.")
+        expected = body.get("expectedRevision") if isinstance(body, dict) else None
+        if isinstance(expected, bool) or not isinstance(expected, int):
+            raise APIError(400, "SCHEDULE_REVISION_REQUIRED", "Include the schedule's current revision.")
+        if expected != current.get("revision"):
+            raise APIError(409, "REVISION_CONFLICT", "The schedule changed. Reload it before saving.")
+        candidate_body = copy.deepcopy(body)
+        stored_input_redacted = self._schedule_input_has_redaction(
+            current.get("input", {})
+        )
+        input_mode = candidate_body.get("inputMode")
+        if input_mode is not None and input_mode not in {"preserve", "replace"}:
+            raise APIError(
+                400, "SCHEDULE_INPUT_MODE_INVALID",
+                "Choose preserve or replace for schedule input mode.",
+            )
+        if stored_input_redacted and input_mode is None:
+            raise APIError(
+                400, "SCHEDULE_INPUT_MODE_REQUIRED",
+                "Choose preserve or replace when editing a schedule with protected input.",
+            )
+        if input_mode == "preserve":
+            if "input" in candidate_body:
+                raise APIError(
+                    400, "SCHEDULE_INPUT_PRESERVE_CONFLICT",
+                    "Omit workflow input when preserving the stored value.",
+                )
+            if candidate_body.get("templateId") != current.get("templateId"):
+                raise APIError(
+                    422, "SCHEDULE_INPUT_REQUIRED_FOR_TEMPLATE_CHANGE",
+                    "Replace input explicitly when changing the scheduled workflow.",
+                )
+            candidate_body["input"] = copy.deepcopy(current.get("input", {}))
+        elif input_mode == "replace" and "input" not in candidate_body:
+            raise APIError(
+                400, "SCHEDULE_INPUT_REQUIRED_FOR_REPLACE",
+                "Provide complete workflow input when replacement mode is selected.",
+            )
+        elif "input" not in candidate_body:
+            if candidate_body.get("templateId") != current.get("templateId"):
+                raise APIError(
+                    422, "SCHEDULE_INPUT_REQUIRED_FOR_TEMPLATE_CHANGE",
+                    "Provide complete workflow input when changing the scheduled workflow.",
+                )
+            candidate_body["input"] = copy.deepcopy(current.get("input", {}))
+        normalized, template, release = self._validated_schedule_definition(
+            candidate_body, update=True
+        )
+        current_material = {
+            key: copy.deepcopy(current.get(key))
+            for key in self._SCHEDULE_DEFINITION_FIELDS
+        }
+        current_material.update(
+            templateVersion=current.get("templateVersion"),
+            releaseHash=current.get("releaseHash"),
+        )
+        next_material = {
+            key: copy.deepcopy(normalized[key])
+            for key in self._SCHEDULE_DEFINITION_FIELDS
+        }
+        next_material.update(
+            templateVersion=release["version"], releaseHash=release["hash"]
+        )
+        if current_material == next_material:
+            return self.public_schedule(current, user)
+        preserved_status = "paused" if current.get("status") == "paused" else "active"
+        current.update({
+            "name": normalized["name"],
+            "templateId": template["id"],
+            "templateName": release["snapshot"]["name"],
+            "templateVersion": release["version"],
+            "releaseHash": release["hash"],
+            "status": preserved_status,
+            "frequency": normalized["frequency"],
+            "localStart": normalized["localStart"],
+            "timezone": normalized["timezone"],
+            "nextRunAt": normalized["firstRunAt"],
+            "scenario": normalized["scenario"],
+            "input": copy.deepcopy(normalized["input"]),
+            "overlapPolicy": normalized["overlapPolicy"],
+            "revision": current["revision"] + 1,
+            "definitionGeneration": current.get("definitionGeneration", 1) + 1,
+            "updatedAt": now(),
+            "_nextIndex": 0,
+        })
+        current.pop("lastError", None)
+        current.pop("completedAt", None)
+        if preserved_status != "paused":
+            current.pop("pausedAt", None)
+        self.put("schedules", current)
+        self.audit(user, "schedule.updated", ident, {
+            "revision": current["revision"],
+            "definitionGeneration": current["definitionGeneration"],
+            "templateId": current["templateId"],
+            "templateVersion": current["templateVersion"],
+            "releaseHash": current["releaseHash"],
+        })
+        return self.public_schedule(current, user)
+
+    def archive_schedule(self, ident, body, user):
+        require(user, {"admin"})
+        if not isinstance(body, dict):
+            raise APIError(400, "SCHEDULE_ACTION_INVALID", "Archive input must be an object.")
+        unknown = sorted(set(body) - {"expectedRevision"})
+        if unknown:
+            raise APIError(400, "SCHEDULE_FIELDS_UNKNOWN", "Remove unsupported archive fields.", {"fields": unknown})
+        schedule = self.get("schedules", ident)
+        expected = body.get("expectedRevision")
+        if isinstance(expected, bool) or not isinstance(expected, int):
+            raise APIError(400, "SCHEDULE_REVISION_REQUIRED", "Include the schedule's current revision.")
+        if expected != schedule.get("revision"):
+            raise APIError(409, "REVISION_CONFLICT", "The schedule changed. Reload it before archiving.")
+        if schedule.get("status") != "archived":
+            stamp = now()
+            schedule.update(
+                status="archived", nextRunAt=None, archivedAt=stamp,
+                updatedAt=stamp, revision=schedule["revision"] + 1,
+            )
+            self.put("schedules", schedule)
+            self.audit(user, "schedule.archived", ident, {
+                "revision": schedule["revision"], "runCount": schedule["runCount"],
+            })
+        return self.public_schedule(schedule, user)
+
+    def _assert_schedule_pin(self, schedule):
+        normalized = scheduling.validate_definition({
+            key: copy.deepcopy(schedule[key])
+            for key in self._SCHEDULE_DEFINITION_FIELDS
+        })
+        template, release = self._schedule_release(
+            schedule["templateId"], schedule["templateVersion"], schedule["releaseHash"],
+            allow_archived=True,
+        )
+        issues = validate_instance(
+            release["snapshot"].get("inputSchema", DEFAULT_TASK_SCHEMA), normalized["input"]
+        )
+        if issues:
+            raise APIError(
+                409, "SCHEDULE_INPUT_STALE",
+                "The scheduled input no longer satisfies its pinned workflow contract.",
+                [item.as_dict() for item in issues],
+            )
+        return template, release
+
+    @staticmethod
+    def _schedule_idempotency_key(schedule, token):
+        return "schedule:" + digest({
+            "scheduleId": schedule["id"],
+            "releaseHash": schedule["releaseHash"],
+            "definitionGeneration": schedule.get("definitionGeneration", 1),
+            "token": token,
+        })[:48]
+
+    def _start_scheduled_run(self, schedule, occurrence_index, scheduled_for, *, manual, token):
+        self._assert_schedule_pin(schedule)
+        occurrence_key = digest({
+            "scheduleId": schedule["id"],
+            "releaseHash": schedule["releaseHash"],
+            "definitionGeneration": schedule.get("definitionGeneration", 1),
+            "occurrenceIndex": occurrence_index,
+            "scheduledFor": scheduled_for,
+            "manual": manual,
+            "token": token,
+        })
+        trigger = {
+            "kind": "schedule",
+            "scheduleId": schedule["id"],
+            "scheduleName": schedule["name"],
+            "templateId": schedule["templateId"],
+            "templateVersion": schedule["templateVersion"],
+            "releaseHash": schedule["releaseHash"],
+            "templateHash": schedule["releaseHash"],
+            "definitionGeneration": schedule.get("definitionGeneration", 1),
+            "occurrenceKey": occurrence_key,
+            "scheduledFor": scheduled_for,
+            "frequency": schedule["frequency"],
+            "timezone": schedule["timezone"],
+            "manual": bool(manual),
+        }
+        return self.create_run(
+            {
+                "templateId": schedule["templateId"],
+                "mode": "fixture",
+                "scenario": schedule["scenario"],
+                "input": copy.deepcopy(schedule["input"]),
+                "idempotencyKey": self._schedule_idempotency_key(schedule, token),
+            },
+            {"id": "scheduler", "role": "admin"},
+            release_pin={
+                "version": schedule["templateVersion"],
+                "hash": schedule["releaseHash"],
+            },
+            trigger_metadata=trigger,
+        )
+
+    @staticmethod
+    def _manual_schedule_request_fingerprint(schedule, body, user):
+        return digest({
+            "schemaVersion": "axiom.schedule-manual-request.v1",
+            "scheduleId": schedule["id"],
+            "definitionGeneration": schedule.get("definitionGeneration", 1),
+            "releaseHash": schedule["releaseHash"],
+            "actorId": user["id"],
+            "request": copy.deepcopy(body),
+        })
+
+    def schedule_action(self, ident, action, body, user):
+        require(user, {"admin", "operator"})
+        if not isinstance(body, dict):
+            raise APIError(400, "SCHEDULE_ACTION_INVALID", "Schedule action input must be an object.")
+        allowed_fields = {"expectedRevision"}
+        if action == "run":
+            allowed_fields.add("idempotencyKey")
+        unknown = sorted(set(body) - allowed_fields)
+        if unknown:
+            raise APIError(400, "SCHEDULE_FIELDS_UNKNOWN", "Remove unsupported schedule action fields.", {"fields": unknown})
+        schedule = self.get("schedules", ident)
+        key = body.get("idempotencyKey") if action == "run" else None
+        if action == "run" and key is None:
+            raise APIError(
+                400, "IDEMPOTENCY_KEY_REQUIRED",
+                "Run now requires an idempotency key so retries cannot create duplicate workflow runs.",
+            )
+        if key is not None and (not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", key)):
+            raise APIError(400, "IDEMPOTENCY_KEY_INVALID", "Idempotency keys must contain 1–128 safe characters.")
+        manual_operations = schedule.setdefault("_manualOperations", {})
+        if action == "run" and key and key in manual_operations:
+            operation = manual_operations[key]
+            fingerprint = self._manual_schedule_request_fingerprint(schedule, body, user)
+            valid = (
+                isinstance(operation, dict)
+                and operation.get("actorId") == user.get("id")
+                and operation.get("definitionGeneration") == schedule.get("definitionGeneration", 1)
+                and isinstance(operation.get("requestFingerprint"), str)
+                and secrets.compare_digest(operation["requestFingerprint"], fingerprint)
+                and isinstance(operation.get("runId"), str)
+            )
+            if not valid:
+                raise APIError(
+                    409, "IDEMPOTENCY_KEY_REUSED",
+                    "This run-now idempotency key is already bound to a different actor or request.",
+                )
+            prior_run = self.get("runs", operation["runId"])
+            trigger = prior_run.get("trigger", {})
+            if (trigger.get("scheduleId") != ident
+                    or trigger.get("definitionGeneration") != operation["definitionGeneration"]
+                    or trigger.get("occurrenceKey") != operation.get("occurrenceKey")):
+                raise APIError(
+                    409, "IDEMPOTENCY_RECORD_INVALID",
+                    "The stored run-now operation no longer matches its workflow run.",
+                )
+            return {"schedule": self.public_schedule(schedule, user),
+                    "run": self.public_run(prior_run, user)}
+        if schedule.get("status") == "archived":
+            raise APIError(409, "SCHEDULE_ARCHIVED", "An archived schedule cannot be changed or run.")
+        expected = body.get("expectedRevision")
+        if isinstance(expected, bool) or not isinstance(expected, int):
+            raise APIError(400, "SCHEDULE_REVISION_REQUIRED", "Include the schedule's current revision.")
+        if expected != schedule.get("revision"):
+            raise APIError(409, "REVISION_CONFLICT", "The schedule changed. Reload it before continuing.")
+        if action == "pause":
+            if schedule["status"] == "paused":
+                return self.public_schedule(schedule, user)
+            if schedule["status"] != "active":
+                raise APIError(409, "SCHEDULE_NOT_ACTIVE", "Only an active schedule can be paused.")
+            stamp = now()
+            schedule.update(status="paused", pausedAt=stamp, updatedAt=stamp,
+                            revision=schedule["revision"] + 1)
+            self.put("schedules", schedule)
+            self.audit(user, "schedule.paused", ident, {"revision": schedule["revision"]})
+            return self.public_schedule(schedule, user)
+        if action == "resume":
+            if schedule["status"] == "active":
+                return self.public_schedule(schedule, user)
+            if schedule["status"] != "paused":
+                raise APIError(409, "SCHEDULE_NOT_PAUSED", "Only a paused schedule can be resumed.")
+            if schedule["frequency"] == "once" and schedule.get("_nextIndex", 0) > 0:
+                raise APIError(409, "SCHEDULE_COMPLETED", "This one-time occurrence has already been consumed.")
+            self._assert_schedule_pin(schedule)
+            stamp = now()
+            schedule.update(status="active", updatedAt=stamp,
+                            revision=schedule["revision"] + 1)
+            schedule.pop("pausedAt", None)
+            schedule.pop("lastError", None)
+            self.put("schedules", schedule)
+            self.audit(user, "schedule.resumed", ident, {"revision": schedule["revision"]})
+            return self.public_schedule(schedule, user)
+        if action != "run":
+            raise APIError(404, "SCHEDULE_ACTION_UNKNOWN", "This schedule action is unavailable.")
+        active_run = self._active_schedule_run(ident)
+        if active_run is not None:
+            raise APIError(
+                409, "SCHEDULE_RUN_ACTIVE",
+                "This schedule already has an unfinished run. Finish or cancel it before running again.",
+                {"activeRunId": active_run["id"]},
+            )
+        token = "manual:" + key
+        stamp = now()
+        request_fingerprint = self._manual_schedule_request_fingerprint(
+            schedule, body, user
+        )
+        run = self._start_scheduled_run(
+            schedule, schedule.get("_nextIndex", 0), stamp,
+            manual=True, token=token,
+        )
+        schedule["lastRunAt"] = stamp
+        schedule["lastRunId"] = run["id"]
+        schedule["runCount"] += 1
+        schedule["revision"] += 1
+        schedule["updatedAt"] = stamp
+        schedule.setdefault("_runIds", []).append(run["id"])
+        schedule["_runIds"] = schedule["_runIds"][-100:]
+        manual_operations[key] = {
+            "actorId": user["id"],
+            "definitionGeneration": schedule.get("definitionGeneration", 1),
+            "requestFingerprint": request_fingerprint,
+            "occurrenceKey": run.get("trigger", {}).get("occurrenceKey"),
+            "runId": run["id"],
+            "createdAt": stamp,
+        }
+        if len(manual_operations) > 100:
+            oldest = min(
+                manual_operations,
+                key=lambda item: str(manual_operations[item].get("createdAt", "")),
+            )
+            manual_operations.pop(oldest, None)
+        self.put("schedules", schedule)
+        self.audit(user, "schedule.run_now", ident, {
+            "runId": run["id"], "revision": schedule["revision"],
+            "idempotent": True,
+        })
+        return {"schedule": self.public_schedule(schedule, user), "run": run}
+
+    def _active_schedule_run(self, schedule_id):
+        for run in self.all("runs"):
+            trigger = run.get("trigger")
+            if (isinstance(trigger, dict)
+                    and trigger.get("scheduleId") == schedule_id
+                    and run.get("status") not in TERMINAL):
+                return run
+        return None
+
+    def _dispatch_due_schedule(self, ident, current_time):
+        schedule = self.get("schedules", ident)
+        if schedule.get("status") != "active":
+            return None
+        window = scheduling.due_window(schedule, current_time)
+        if window is None:
+            return None
+        previous = self._active_schedule_run(ident)
+        stamp = scheduling.utc_iso(scheduling.parse_current_time(current_time))
+        schedule["_nextIndex"] = window.next_index
+        schedule["nextRunAt"] = window.next_run_at
+        schedule["updatedAt"] = stamp
+        schedule["revision"] += 1
+        if previous is not None:
+            schedule["missedCount"] += window.due_count
+            if schedule["frequency"] == "once":
+                schedule.update(status="completed", completedAt=stamp)
+            self.put("schedules", schedule)
+            self.audit("system", "schedule.occurrence.skipped", ident, {
+                "scheduledFor": window.scheduled_for,
+                "dueCount": window.due_count,
+                "activeRunId": previous["id"],
+                "overlapPolicy": "skip",
+            })
+            return {"scheduleId": ident, "outcome": "overlap_skipped",
+                    "activeRunId": previous["id"]}
+        run = self._start_scheduled_run(
+            schedule, window.occurrence_index, window.scheduled_for,
+            manual=False, token="occurrence:" + str(window.occurrence_index),
+        )
+        schedule["missedCount"] += window.coalesced_count
+        schedule["lastRunAt"] = stamp
+        schedule["lastRunId"] = run["id"]
+        schedule["runCount"] += 1
+        schedule.setdefault("_runIds", []).append(run["id"])
+        schedule["_runIds"] = schedule["_runIds"][-100:]
+        if schedule["frequency"] == "once":
+            schedule.update(status="completed", completedAt=stamp)
+        self.put("schedules", schedule)
+        self.audit("system", "schedule.occurrence.dispatched", ident, {
+            "runId": run["id"], "scheduledFor": window.scheduled_for,
+            "coalescedCount": window.coalesced_count,
+            "occurrenceIndex": window.occurrence_index,
+        })
+        return {"scheduleId": ident, "outcome": "dispatched", "runId": run["id"]}
+
+    def _record_schedule_dispatch_failure(self, ident, exc):
+        schedule = self.get("schedules", ident)
+        if schedule.get("status") != "active":
+            return
+        code = exc.code if isinstance(exc, APIError) else "SCHEDULE_DISPATCH_FAILED"
+        message = exc.message if isinstance(exc, APIError) else "The scheduled run could not be prepared safely."
+        stamp = now()
+        schedule.update(
+            status="paused", pausedAt=stamp, updatedAt=stamp,
+            revision=schedule["revision"] + 1,
+            lastError={"code": code, "message": message, "time": stamp},
+        )
+        self.put("schedules", schedule)
+        self.audit("system", "schedule.dispatch_failed", ident, {
+            "code": code, "status": "paused", "nextRunAt": schedule.get("nextRunAt"),
+        })
+
+    def dispatch_due_schedules(self, current_time=None):
+        instant = scheduling.parse_current_time(current_time)
+        with self.lock:
+            active_schedules = [
+                item for item in self.all("schedules")
+                if item.get("status") == "active" and item.get("nextRunAt")
+            ]
+        schedule_ids = []
+        preflight_failures = []
+        for item in active_schedules:
+            try:
+                if scheduling.parse_utc(item["nextRunAt"]) <= instant:
+                    schedule_ids.append(item["id"])
+            except Exception as exc:
+                preflight_failures.append((item.get("id"), exc))
+        outcomes = []
+        for ident, exc in preflight_failures:
+            if not isinstance(ident, str):
+                continue
+            try:
+                self.atomic(self._record_schedule_dispatch_failure, ident, exc)
+                outcomes.append({"scheduleId": ident, "outcome": "paused_invalid_record"})
+            except Exception:
+                pass
+        for ident in schedule_ids:
+            try:
+                outcome = self.atomic(self._dispatch_due_schedule, ident, instant)
+                if outcome:
+                    outcomes.append(outcome)
+            except Exception as exc:
+                try:
+                    self.atomic(self._record_schedule_dispatch_failure, ident, exc)
+                except Exception:
+                    # A malformed record is isolated from all other schedules;
+                    # the outer scheduler log remains credential-free.
+                    pass
+        return outcomes
+
+    def tick_schedules(self, current_time=None):
+        return self.dispatch_due_schedules(current_time)
+
     def _ingest_artifacts(self, run_id, supplied, user):
         if supplied is None:
             return []
@@ -5492,7 +6127,8 @@ class Store:
         return [self._public_artifact(self.get("artifacts", ident))
                 for ident in run.get("_artifactIds", [])]
 
-    def create_run(self, body, user, experiment_id=None):
+    def create_run(self, body, user, experiment_id=None, *, release_pin=None,
+                   trigger_metadata=None):
         require(user, {"admin", "reviewer", "contributor"})
         try:
             encode(body)
@@ -5510,6 +6146,7 @@ class Store:
                 "templateId": body.get("templateId"), "mode": body.get("mode", "simulation"),
                 "scenario": body.get("scenario", "happy"), "input": body.get("input", {}),
                 "artifacts": body.get("artifacts", []),
+                "releasePin": release_pin, "trigger": trigger_metadata,
             })
             row = self.db.execute("SELECT data FROM run_requests WHERE id=?", (request_record_id,)).fetchone()
             if row:
@@ -5522,7 +6159,7 @@ class Store:
                     raise APIError(409, "IDEMPOTENCY_RECORD_INVALID", "The recorded task request no longer resolves to its run.") from exc
                 return self.public_run(existing_run, user)
         template = self.get("templates", body.get("templateId", ""))
-        if template.get("status") == "archived":
+        if template.get("status") == "archived" and release_pin is None:
             raise APIError(409, "TEMPLATE_ARCHIVED", "Restore this template before starting a new task or rehearsal.")
         mode = body.get("mode", "simulation")
         scenario = body.get("scenario", "happy")
@@ -5533,7 +6170,18 @@ class Store:
         if mode == "fixture" and normalized_scenario not in {"happy", "after_write_timeout"}:
             raise APIError(400, "FIXTURE_SCENARIO", "This failure scenario is available in safe simulation mode only.")
         if mode == "fixture":
-            release = self._verified_release(template)
+            if release_pin is not None:
+                if (not isinstance(release_pin, dict)
+                        or set(release_pin) != {"version", "hash"}
+                        or isinstance(release_pin.get("version"), bool)
+                        or not isinstance(release_pin.get("version"), int)
+                        or not isinstance(release_pin.get("hash"), str)):
+                    raise APIError(500, "SCHEDULE_PIN_INVALID", "The internal schedule release pin is invalid.")
+                release = self._verified_release(
+                    template, release_pin["version"], release_pin["hash"]
+                )
+            else:
+                release = self._verified_release(template)
             snapshot = copy.deepcopy(release["snapshot"])
             version = release["version"]
         else:
@@ -5589,6 +6237,13 @@ class Store:
                "version": version, "mode": mode, "scenario": scenario, "status": "queued", "startedAt": now(), "updatedAt": now(), "input": request_input,
                "nodes": [{"nodeId": n["id"], "status": "pending", "attempt": 0, "input": {}, "output": None, "evidence": [], "operationKey": f"{run_id}:{n['id']}", "operationGeneration": 1} for n in snapshot["nodes"]],
                "_snapshot": snapshot, "_snapshotHash": digest(snapshot), "_initiator": user["id"], "_decisions": [], "_autoDecisions": bool(experiment_id), "_experimentId": experiment_id, "_normalizedScenario": normalized_scenario, "_reminders": [], "_artifactIds": [item["id"] for item in artifacts]}
+        if trigger_metadata is not None:
+            if (not isinstance(trigger_metadata, dict)
+                    or trigger_metadata.get("kind") != "schedule"
+                    or not isinstance(trigger_metadata.get("scheduleId"), str)
+                    or not isinstance(trigger_metadata.get("occurrenceKey"), str)):
+                raise APIError(500, "SCHEDULE_TRIGGER_INVALID", "The internal schedule trigger metadata is invalid.")
+            run["trigger"] = copy.deepcopy(trigger_metadata)
         self.put("runs", run)
         if request_record_id:
             self.put("run_requests", {
@@ -5596,6 +6251,11 @@ class Store:
                 "requestFingerprint": request_fingerprint, "runId": run_id, "createdAt": now(),
             })
         self.event(run, "run.created", f"{'Safe simulation' if mode == 'simulation' else 'Local fixture execution'} started from {version}.")
+        if trigger_metadata is not None:
+            self.event(
+                run, "run.scheduled",
+                "A durable workflow schedule created this run from its pinned release.",
+            )
         if scenario == "malicious_content":
             self.event(run, "input.untrusted_content_isolated", "The hostile-content fixture was recorded as inert task data; it received no execution authority.")
         if artifacts:
@@ -7294,13 +7954,18 @@ class Store:
         record["hashAlgorithm"] = "SHA-256 over canonical JSON before artifactHash/hashAlgorithm fields"
         return record
 
-    def _redact_sensitive_value(self, value, field_name="", redact_external=False):
+    @staticmethod
+    def _is_sensitive_field_name(field_name):
         normalized = re.sub(r"[^a-z0-9]", "", field_name.lower())
         safe_token_metrics = {"maxmodeltokens", "prompttokens", "completiontokens", "totaltokens"}
-        if normalized not in safe_token_metrics and any(token in normalized for token in (
+        return normalized not in safe_token_metrics and any(token in normalized for token in (
                 "password", "passwd", "secret", "apikey", "accesstoken",
                 "refreshtoken", "authorization", "cookie", "privatekey",
-                "credential", "bearer", "jwt", "token")):
+                "credential", "bearer", "jwt", "token"))
+
+    def _redact_sensitive_value(self, value, field_name="", redact_external=False):
+        normalized = re.sub(r"[^a-z0-9]", "", field_name.lower())
+        if self._is_sensitive_field_name(field_name):
             return "[REDACTED]"
         if redact_external and normalized == "externalcontent":
             canonical = encode(value)
@@ -7868,6 +8533,24 @@ class Handler(BaseHTTPRequestHandler):
                     return self.store.stop_agent_run(ident, user)
             if path == "/api/session" and self.command == "POST":
                 return self.store.switch_session(sid, body.get("userId"))
+            if path == "/api/schedules":
+                if self.command == "GET":
+                    return self.store.list_schedules(user)
+                if self.command == "POST":
+                    return self.store.create_schedule(body, user)
+            match = re.fullmatch(
+                r"/api/schedules/([A-Za-z0-9_-]+)(?:/(pause|resume|run))?", path
+            )
+            if match:
+                ident, action = match.groups()
+                if not action and self.command == "GET":
+                    return self.store.get_schedule(ident, user)
+                if not action and self.command == "PUT":
+                    return self.store.update_schedule(ident, body, user)
+                if not action and self.command == "DELETE":
+                    return self.store.archive_schedule(ident, body, user)
+                if action and self.command == "POST":
+                    return self.store.schedule_action(ident, action, body, user)
             if path == "/api/agents":
                 if self.command == "GET":
                     return self.store.all("agents")

@@ -250,10 +250,10 @@ class SimulationLabHttpTests(unittest.TestCase):
         self.assertEqual(200, status, result)
         return result
 
-    def test_schema_12_catalog_exposes_exactly_seven_pinned_profiles(self):
+    def test_schema_13_catalog_exposes_exactly_seven_pinned_profiles(self):
         status, health, _ = self.request("GET", "/api/health", csrf=False)
         self.assertEqual(200, status, health)
-        self.assertEqual(12, health["schemaVersion"])
+        self.assertEqual(13, health["schemaVersion"])
 
         status, catalog, _ = self.request("GET", "/api/simulation-lab")
         self.assertEqual(200, status, catalog)

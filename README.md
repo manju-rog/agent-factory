@@ -2,7 +2,7 @@
 
 Axiom is a runnable local reference application for building governed business workflows with reusable, adaptive Goal Agents. It combines a visual workflow designer, typed node connections, exact-action approvals, durable agent sessions, behavior rehearsals, evidence tracking, and bounded external-service connections.
 
-This repository contains Axiom 2.1.0 with SQLite schema 12. It is a local development and demonstration system, not a production deployment.
+This repository contains Axiom 2.2.0 with SQLite schema 13. It is a local development and demonstration system, not a production deployment.
 
 ## Run locally
 
@@ -26,12 +26,19 @@ Writes still pause for approval of the exact prepared action. A lost Jira acknow
 
 See the [complete Simulation Lab guide](docs/SIMULATION_LAB.md) for the guided walkthrough, REST API, profile behavior, and safety boundaries.
 
+## Schedule workflow runs
+
+Open **Schedules** to run an exact published workflow version once, hourly, daily, or weekly. Schedules use IANA time zones, preserve daily and weekly wall-clock time across daylight-saving changes, survive server restarts, and prevent overlapping runs. Administrators can create, edit, pause, resume, run now, and archive schedules; operators can control eligible existing schedules. Every generated run records the schedule and pinned release that started it.
+
+See the [workflow scheduling guide](docs/SCHEDULING.md) for the interface, API, recurrence, recovery, and safety behavior.
+
 ## Start here
 
 - [Delivery, startup, verification, and feature status](START_HERE.md)
 - [Complete beginner's guide](AXIOM_BEGINNER_GUIDE.md)
 - [How Axiom's agentic intelligence works](AXIOM_AGENTIC_INTELLIGENCE_GUIDE.md)
 - [Atlas Checkout Simulation Lab](docs/SIMULATION_LAB.md)
+- [Workflow scheduling](docs/SCHEDULING.md)
 - [Application documentation](app/README.md)
 - [External integration guide](docs/EXTERNAL_INTEGRATIONS.md)
 - [Agent Factory architecture](factory/Agent_Factory_Paradigm.md)

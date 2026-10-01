@@ -30,6 +30,8 @@ async function main() {
   };
   const storedValues = new Map([['axiom.theme', 'dark']]);
   const localStorage = {getItem(key) { return storedValues.get(key) ?? null; }, setItem(key, value) { storedValues.set(key, String(value)); }};
+  const sessionValues = new Map();
+  const sessionStorage = {getItem(key) { return sessionValues.get(key) ?? null; }, setItem(key, value) { sessionValues.set(key, String(value)); }, removeItem(key) { sessionValues.delete(key); }};
   const document = {
     hidden: false, activeElement: null, documentElement,
     querySelector(selector) { return selector === 'meta[name="theme-color"]' ? themeMeta : nodes.get(selector) || null; },
@@ -41,7 +43,7 @@ async function main() {
       remove() {}, click() {}}; },
   };
   const context = vm.createContext({
-    window: {AXIOM_PREVIEW_DATA: data, localStorage, innerWidth: 1440, innerHeight: 900,
+    window: {AXIOM_PREVIEW_DATA: data, localStorage, sessionStorage, innerWidth: 1440, innerHeight: 900,
       matchMedia() { return {matches: false}; }, addEventListener() {}},
     document,
     location: {hash: '', reload() {}},
@@ -87,7 +89,7 @@ async function main() {
   assert.equal(nodes.get('#toast-region').children.at(-1).attributes.role, 'status', 'Success feedback uses a non-interrupting status.');
   for (let roleIndex = 0; roleIndex < data.users.length; roleIndex++) {
     evaluate(`state.data.user=state.data.users[${roleIndex}];state.experiments=state.data.experiments||[];state.audit=state.data.audit||[];`);
-    for (const route of ['studio','agents','runs','review','lab','connections','audit']) {
+    for (const route of ['studio','agents','runs','schedules','review','lab','connections','audit']) {
       evaluate(`state.route=${JSON.stringify(route)};state.run=null;state.runId=null;state.selected=null;state.panel='assistant';render();`);
       inspect('#app');
       counts.routeRenders++;
@@ -98,6 +100,72 @@ async function main() {
       counts.runRenders++;
     }
   }
+  evaluate(`globalThis.__scheduleTemplate=state.data.templates.find(template=>template.publishedVersion&&template.status!=='archived');
+    state.data.schedules=[{id:'schedule_ui_contract',name:'Protected daily review',templateId:__scheduleTemplate.id,
+      templateName:__scheduleTemplate.name,templateVersion:__scheduleTemplate.publishedVersion,status:'paused',frequency:'daily',
+      localStart:'2026-10-02T09:00',timezone:'Asia/Kolkata',nextRunAt:'2026-10-02T03:30:00Z',lastRunAt:null,lastRunId:null,
+      runCount:0,missedCount:0,revision:3,scenario:'happy',input:{apiToken:'[REDACTED]'},inputRedacted:true,
+      overlapPolicy:'skip',allowedActions:['edit','archive','run','resume'],actionPolicy:[
+        {action:'edit',allowed:true,reason:'Administrator role is eligible.'},{action:'archive',allowed:true,reason:'Administrator role is eligible.'},
+        {action:'run',allowed:true,reason:'Operations role is eligible.'},{action:'resume',allowed:true,reason:'Operations role is eligible.'}]}];
+    state.data.user=state.data.users.find(user=>user.role==='admin')||state.data.users[0];state.route='schedules';render();`);
+  const scheduleHtml = inspect('#app');
+  assert.match(scheduleHtml, /Protected daily review/, 'The schedules route renders durable schedule records.');
+  assert.match(scheduleHtml, /data-schedule-action="resume"/, 'A paused schedule exposes its server-authorized resume action.');
+  assert.equal(evaluate("scheduleInputContainsRedaction({apiToken:'[REDACTED]'})"), true,
+    'Masked schedule input is detected defensively even without the explicit server flag.');
+  evaluate('scheduleModal(state.data.schedules[0])');
+  const protectedScheduleModal = inspect('#modal-root');
+  assert.match(protectedScheduleModal, /id="schedule-input"[^>]*readonly/, 'Protected schedule input cannot be edited as masked text.');
+  assert.match(protectedScheduleModal, /id="schedule-template"[^>]*disabled/, 'Protected input cannot be silently rebound to another workflow.');
+  assert.match(protectedScheduleModal, /Protected values are hidden and retained/, 'The schedule editor explains preserve-on-update behavior.');
+  assert.match(protectedScheduleModal, /Create a replacement schedule to change the workflow or its input/, 'The schedule editor explains how to replace a protected binding.');
+  const pendingRunNow = JSON.parse(evaluate('JSON.stringify(scheduleRunNowOperation(state.data.schedules[0]))'));
+  assert.equal(pendingRunNow.expectedRevision, 3, 'Run now binds the request to the displayed schedule revision.');
+  assert.match(pendingRunNow.idempotencyKey, /^[A-Za-z0-9._:-]{1,128}$/, 'Run now creates a server-compatible idempotency key.');
+  assert.ok(sessionValues.has('axiom.schedule-run-now.v1:schedule_ui_contract'), 'The pending run-now identity survives a page reload in session storage.');
+  evaluate('scheduleRunNowMemory.clear()');
+  assert.deepEqual(JSON.parse(evaluate("JSON.stringify(readScheduleRunNowOperation('schedule_ui_contract'))")), pendingRunNow,
+    'A rerender or reload reuses the exact pending run-now request.');
+  sessionValues.set('axiom.schedule-run-now.v1:schedule_ui_contract', JSON.stringify({idempotencyKey:'unsafe key',expectedRevision:3,extra:true}));
+  evaluate('scheduleRunNowMemory.clear()');
+  assert.equal(evaluate("readScheduleRunNowOperation('schedule_ui_contract')"), null, 'Malformed stored retry state is ignored safely.');
+  assert.equal(sessionValues.has('axiom.schedule-run-now.v1:schedule_ui_contract'), false, 'Malformed stored retry state is removed.');
+  evaluate("writeScheduleRunNowOperation('schedule_ui_contract',{idempotencyKey:'retry-safe-1',expectedRevision:3})");
+  evaluate("clearScheduleRunNowOperation('schedule_ui_contract')");
+  assert.equal(sessionValues.has('axiom.schedule-run-now.v1:schedule_ui_contract'), false, 'A resolved run-now request clears its stored retry identity.');
+  const nonAdminIndex = data.users.findIndex(user => user.role !== 'admin');
+  assert.notEqual(nonAdminIndex, -1, 'The captured data must include a non-administrator role.');
+  evaluate(`state.template=__scheduleTemplate;state.data.user=state.data.users[${nonAdminIndex}];`);
+  for (const [viewName, html] of [['Studio', evaluate('studio()')], ['Runs', evaluate('runsPage()')]]) {
+    const entry = html.match(/<button[^>]*data-schedule-create="true"[^>]*>/)?.[0];
+    assert.ok(entry, `${viewName} exposes a discoverable scheduling entry point.`);
+    assert.match(entry, /aria-disabled="true"/, `${viewName} keeps the denied schedule control focusable.`);
+    assert.match(entry, /data-action-denied="Administrator role required\./, `${viewName} explains the administrator requirement.`);
+    assert.doesNotMatch(entry, /data-action="new-schedule"/, `${viewName} does not expose an active create action to non-administrators.`);
+  }
+  evaluate("state.data.user=state.data.users.find(user=>user.role==='admin')||state.data.users[0]");
+  for (const [viewName, html] of [['Studio', evaluate('studio()')], ['Runs', evaluate('runsPage()')]]) {
+    const entry = html.match(/<button[^>]*data-schedule-create="true"[^>]*>/)?.[0];
+    assert.match(entry, /data-action="new-schedule"/, `${viewName} enables schedule creation for an administrator.`);
+    assert.doesNotMatch(entry, /aria-disabled="true"/, `${viewName} administrator entry point is active.`);
+  }
+  evaluate('state.scheduleEditor.dirty=true');
+  assert.equal(evaluate('closeModal()'), false, 'Canceling an unsaved schedule editor requires explicit discard confirmation.');
+  assert.ok(nodes.get('#modal-root').innerHTML, 'Declining discard keeps the schedule editor open.');
+  evaluate('globalThis.__originalConfirm=confirm;globalThis.confirm=()=>true;closeModal();globalThis.confirm=__originalConfirm;delete globalThis.__originalConfirm;delete globalThis.__scheduleTemplate;');
+  assert.match(appSource, /if\(state\.scheduleEditor\?\.inputRedacted\)\{delete payload\.input;payload\.inputMode='preserve';\}/,
+    'Protected schedule updates explicitly preserve server input without resubmitting masked values.');
+  assert.doesNotMatch(evaluate('performScheduleAction.toString()'), /dataset\.idempotencyKey/,
+    'Run-now retry identity is never tied to a transient button element.');
+  assert.match(evaluate('performScheduleAction.toString()'), /error\?\.structured===true/,
+    'Structured server rejections clear stale retry state while ambiguous transport failures retain it.');
+  assert.match(evaluate('api.toString()'), /error\.structured=true/,
+    'HTTP API errors are marked so retry handling can distinguish them from ambiguous transport failures.');
+  assert.match(appSource, /method:'DELETE',body:\{expectedRevision:schedule\.revision\}/,
+    'Archiving binds the action to the schedule revision displayed to the user.');
+  assert.match(appSource, /beforeunload[\s\S]*?updateScheduleEditorDirty\(\)/,
+    'Browser navigation protects unsaved schedule edits.');
   evaluate(`globalThis.__connectionsBeforeContract=clone(state.data.connections);
     state.data.connections=[{id:'fixture-ticket',name:'Local ticket store',type:'local-fixture',status:'revoked',generation:4,
       sideEffects:'write',allowedOperations:['ticket.create'],description:'Local only'}];state.route='connections';render();`);

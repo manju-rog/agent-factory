@@ -2,7 +2,7 @@
 
 New to workflow software or AI agents? Start with [Axiom: the complete beginner's guide](AXIOM_BEGINNER_GUIDE.md). It explains the product from first principles, walks through realistic examples, and clearly separates local demonstrations, configured integrations, and remaining production work.
 
-This delivery contains Axiom 2.0.0, an original runnable local application with SQLite schema 11, an explorable snapshot of its interface, a complete production implementation prompt, primary-source research, and meeting traceability. This release adds a governed external-connection gateway to the adaptive Agent Factory and reusable Goal Agent workflow nodes. It is not a production deployment.
+This delivery contains Axiom 2.2.0, an original runnable local application with SQLite schema 13, an explorable snapshot of its interface, a complete production implementation prompt, primary-source research, and meeting traceability. This release includes the governed external-connection gateway, stateful Simulation Lab, adaptive Agent Factory, reusable Goal Agent workflow nodes, and durable version-pinned workflow scheduling. It is not a production deployment.
 
 ## Start the application
 
@@ -50,6 +50,12 @@ The local database starts with six published workflows: the original CSR resolut
 
 Each demonstration is a published 14-step, 16-connection workflow with typed required input, parallel checks, both condition routes, exact full-action approval, a local simulated record, and a final receipt. These use deterministic local fixture data so the same demo can be repeated reliably. They do not connect to external payment, identity, monitoring, procurement, insurance, Jira, or cloud systems.
 
+## Schedule a workflow
+
+Open **Schedules** to select an active published workflow and run its exact current release once, hourly, daily, or weekly. Enter a local start date/time and IANA timezone, review the JSON input, then create the schedule. The schedule can be paused, resumed, edited, run immediately, or archived according to the visible role policy. Generated runs link back to their schedule, and schedules show their last and next run.
+
+Schedules persist through restart and do not silently move to a newly published workflow version. The local worker prevents overlapping runs from the same schedule and coalesces missed times after downtime into one catch-up start. The server must be running for dispatch; this is not a distributed or high-availability scheduler. See [the complete scheduling guide](docs/SCHEDULING.md).
+
 The seed process is safe to run again: it adds a missing built-in workflow ID without replacing a workflow already stored under that ID. Each published demonstration release pins and hashes its fixture manifest and defaults so later runs can verify the exact data contract used by that release.
 
 ## What the delivery means
@@ -60,7 +66,7 @@ The seed process is safe to run again: it adds a missing built-in workflow ID wi
 | Agent registry | Create reusable built-in aliases, edit metadata, deprecate while preserving history, delete only unused custom registrations, refuse built-in/referenced deletion; tested SDK and impact API. | Dynamic package registration, arbitrary approved adapters, connector evaluation catalog, and production secret-backed connections. |
 | Agent Factory | Author versioned Goal Agent specifications; constrain context, capabilities, schemas, policies and budgets; require separate reviewer activation; run durable adaptive sessions; request scoped clarification; inspect action/observation history; approve exact prepared actions; compare controlled behavior variations; and place approved pinned versions into workflows. | Live-model planning/evaluation, production capability adapters and credentials, authoritative validators for custom domains, tenant isolation, retention/observability, distributed execution, load/failover evidence, and formal accessibility certification. |
 | AI proposals | Review-before-apply proposals, assumptions, stale-revision rejection, and at most 100 allowlisted node/config, edge, field-binding, approval-insertion, and same-implementation replacement operations. | Live provider compatibility/quality, requirement compiler, retrieval, grounded claim evaluation, requirement links, and broader language coverage. |
-| Execution | SQLite-persisted local scheduler; structured branch/join/outcome handling; pinned releases, ordered migrations, effect ledger, bounded local attachments, and actor-scoped idempotent task starts. | Distributed workers, production queues/streams, load/failover testing, tenant isolation, and production artifact storage/scanning. |
+| Execution | SQLite-persisted local scheduler; one-time/hourly/daily/weekly version-pinned schedules; structured branch/join/outcome handling; ordered migrations, effect ledger, bounded local attachments, and actor-scoped idempotent task starts. | Distributed workers, production queues/streams, load/failover testing, tenant isolation, and production artifact storage/scanning. |
 | Human control | Separate manual execution and approval, eligible local roles, expiry, complete exact-action packets, and generation-bound fixture authority rechecked before decision and dispatch. | Corporate OIDC/directory grants, production delegation/revocation, tenant-scoped external identities, and external notification delivery. |
 | Evidence | Adapter records, events, decisions, hashes, receipts, access-filtered evidence, and recursively redacted hash-sealed run export with Markdown summary. | Persistent external source snapshots, retention/deletion, tenant authorization, production provenance storage, and identity-backed export signing. |
 | Rehearsal | Versioned ten-case known-answer catalog, isolated required-suite execution, deterministic invariants, paired comparison and regression-case domain primitives. | Scenario authoring/persistence UI, repeated stochastic/model trials, team evaluations, and release-promotion workflow. |
@@ -72,8 +78,8 @@ The complete target is specified in `Axiom_Codex_Master_Prompt.md`. A documented
 
 ## Integrity and lifecycle boundaries
 
-- This checkpoint is Axiom 2.0.0 with SQLite schema 11 and built-in deterministic-agent contract 1.3.0.
-- Schema 10 added durable Goal Agent specifications, immutable published versions, adaptive sessions, and parent/child workflow bindings. Schema 11 adds the governed external-connection gateway and its health records. Migrations preserve earlier application records and do not rewrite prior published workflow releases or their hashes. Earlier compatibility snapshots remain separately hashed and bound to their source version/hash.
+- This checkpoint is Axiom 2.2.0 with SQLite schema 13 and built-in deterministic-agent contract 1.3.0.
+- Schema 10 added durable Goal Agent specifications, immutable published versions, adaptive sessions, and parent/child workflow bindings. Schema 11 added the governed external-connection gateway and its health records. Schema 12 added the stateful Simulation Lab. Schema 13 adds durable workflow schedules. Migrations preserve earlier application records and do not rewrite prior published workflow releases or their hashes. Earlier compatibility snapshots remain separately hashed and bound to their source version/hash.
 - A Goal Agent draft is configuration, not executable authority. Reviewer activation creates the approved version and workflow alias; runs pin the exact specification, tool contracts, and result contract they started with.
 - API and stored JSON use strict RFC 8259 handling. Duplicate object keys, non-finite numbers, and unpaired Unicode surrogates are rejected; startup checks legacy JSON before applying schema changes.
 - Archiving keeps releases, history, and existing runs readable, but blocks new fixture runs, draft simulations, and rehearsal experiments until the template is restored. Both server rules and visible controls enforce this boundary.
@@ -82,9 +88,9 @@ The complete target is specified in `Axiom_Codex_Master_Prompt.md`. A documented
 
 ## Verification evidence
 
-The accompanying tests exercise domain services, real local records, strict integration contracts, and HTTP requests. The Axiom 2.0 discovery gate passed **287/287 tests in 34.162 seconds** on 2026-09-25. The prior Axiom 1.9 **235/235** gate and supplied factory source checkpoint's historical 113-test result remain separate dated baselines. Commands and current evidence are recorded in `research/QA_NOTES.md` and `factory/Verification.md`.
+The accompanying tests exercise domain services, real local records, strict integration contracts, and HTTP requests. The Axiom 2.2 discovery gate passed **338/338 tests in 70.056 seconds** on 2026-10-01, including 16 focused scheduling tests. The prior Axiom 2.1 **322/322**, Axiom 2.0 **287/287**, Axiom 1.9 **235/235**, and supplied factory source checkpoint's historical 113-test results remain separate dated baselines. Commands and current evidence are recorded in `research/QA_NOTES.md` and `factory/Verification.md`.
 
-Node syntax passed for `app.js`, `icons.js`, and `theme.js`; Python `compileall` and JSON validation passed. Both regenerated preview captures passed the UI contract with **28 route, 72 run, 7 inspector, 2 mapping-dialog, 18 evidence-dialog, 1 effects-dialog, and 18 repair-dialog renders** apiece. Important covered behaviors include:
+Node syntax passed for `app.js`, `icons.js`, and `theme.js`; Python `compileall` and JSON validation passed. Both preview captures passed the UI contract with **32 route, 72 run, 7 inspector, 2 mapping-dialog, 18 evidence-dialog, 1 effects-dialog, and 18 repair-dialog renders** apiece. Important covered behaviors include:
 
 - Restart with in-flight work and finish the same logical run.
 - Lose the response after a local ticket is created, restart, reconcile, and retain one ticket after retry.
@@ -94,6 +100,7 @@ Node syntax passed for `app.js`, `icons.js`, and `theme.js`; Python `compileall`
 - Keep simulation from inserting local ticket records.
 - Fail a malformed run without stalling an unrelated healthy run.
 - Keep the scheduler progressing while a model request waits outside the database lock.
+- Preserve a scheduled workflow's exact release pin across later publication and restart; coalesce missed times, prevent overlap, and deduplicate automatic and manual starts.
 - Reject unsupported schemas/rules and malformed structured graphs before publication.
 - Bind both directly approval-required writes and directly guarding explicit Approval controls to the exact downstream prepared action, and reject stale approval references or operation-key reuse with different action data.
 - Keep contradictory evidence visible and prevent access-filtered exports from leaking hidden references.

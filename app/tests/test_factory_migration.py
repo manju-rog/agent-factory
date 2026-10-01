@@ -56,12 +56,12 @@ class FactoryMigrationTests(unittest.TestCase):
 
     def test_schema_nine_records_survive_factory_and_gateway_migrations_and_reopen(self):
         self.create_schema_nine_marker()
-        self.assertEqual(12, SCHEMA_VERSION)
+        self.assertEqual(13, SCHEMA_VERSION)
 
         store = Store(self.db_path, latency=0)
         try:
             self.assertEqual(
-                12, store.db.execute("PRAGMA user_version").fetchone()[0]
+                13, store.db.execute("PRAGMA user_version").fetchone()[0]
             )
             migration = store.db.execute(
                 "SELECT name FROM schema_migrations WHERE version=10"
@@ -75,6 +75,10 @@ class FactoryMigrationTests(unittest.TestCase):
                 "SELECT name FROM schema_migrations WHERE version=12"
             ).fetchone()
             self.assertIsNotNone(simulation_migration)
+            scheduling_migration = store.db.execute(
+                "SELECT name FROM schema_migrations WHERE version=13"
+            ).fetchone()
+            self.assertIsNotNone(scheduling_migration)
             tables = {
                 row[0]
                 for row in store.db.execute(
@@ -83,7 +87,7 @@ class FactoryMigrationTests(unittest.TestCase):
             }
             self.assertTrue({
                 "agent_specs", "agent_runs", "simulation_worlds",
-                "simulation_events", "simulation_operations",
+                "simulation_events", "simulation_operations", "schedules",
             }.issubset(tables))
             preserved = json.loads(
                 store.db.execute(

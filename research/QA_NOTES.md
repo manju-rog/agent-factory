@@ -1,6 +1,39 @@
 # Axiom reference application: verification record
 
-## Current Axiom 2.0 release update
+## Current Axiom 2.2 release update
+
+- Checkpoint: Axiom 2.2.0, SQLite schema 13, built-in deterministic-agent contract 1.3.0.
+- Schema 13 adds durable one-time, hourly, daily, and weekly workflow schedules with IANA timezone recurrence, exact published release pins, optimistic revisions and definition generations, restart recovery, coalesced missed occurrences, overlap protection, idempotent automatic/manual starts, role-controlled lifecycle actions, audit records, and generated-run provenance.
+- Scheduling reuses the ordinary trusted run-creation path. A schedule can start work but cannot approve a later manual stage or consequential prepared action. The local server must be running; no result establishes distributed scheduling, high availability, clock coordination across workers, load capacity, or exactly-once external delivery.
+- The focused scheduling gate passed **16/16 tests**, including recurrence and DST, restart, immutable pinning after a newer publication or template archive, overlap/missed-run handling, edit-generation isolation, exact lost-response replay, protected-input preservation, pause/resume/run-now/archive, stale-revision rejection, roles, idempotency, and real loopback HTTP boundaries.
+- The full Axiom 2.2 discovery gate passed **338/338 tests in 70.056 seconds** on 2026-10-01. The Axiom 2.1 322-test result remains a separate historical baseline.
+- JavaScript syntax, Python compilation, JSON validation, and the available Node VM interface contract passed. Browser verification is recorded separately below and does not constitute broad accessibility or cross-browser certification.
+
+Current scheduling commands include:
+
+```bash
+# From app
+python3 -m unittest -v tests.test_scheduling
+python3 -m unittest discover -s tests -v
+python3 -m compileall -q .
+node --check public/app.js
+node tests/test_ui_contract.js ../preview/preview_data.json
+```
+
+## Axiom 2.2 scheduling browser review — 2026-10-01
+
+A headed Chrome pass against the real persistent localhost application completed the primary scheduling journey:
+
+- `/api/health` reported `status: ready`, application version `2.2.0`, and schema version `13`.
+- The administrator created **Browser verification schedule** for **Service request orchestration**, every day at `13:19` in `Asia/Kolkata`. The Schedules table showed its active state, next local/UTC-derived occurrence, and pinned workflow version 1.
+- Pause and resume changed the persisted state and available action in place. **Run now** created exactly one linked workflow run, `run_fd3bcea45380`.
+- The run inspector showed **Manually started from a schedule**, the source schedule ID/name, and pinned workflow version 1. Normal execution reached the existing human approval and waited there; the scheduled trigger did not bypass the reviewer decision or prepared-action boundary.
+- **View schedules** returned to the originating schedule and retained its linked last-run record. The schedule was left safely paused so the browser check will not trigger unattended work.
+- The complete scheduling page was visually inspected in both light and night modes. Buttons, metrics, table, status, provenance, and actions rendered without clipping at the available desktop viewport.
+
+This pass used local fixture execution and created no external effect. It does not establish mobile/cross-browser coverage, formal accessibility conformance, distributed scheduling, high availability, or a live provider result.
+
+## Historical Axiom 2.0 release update
 
 - Checkpoint: Axiom 2.0.0, SQLite schema 11, built-in deterministic-agent contract 1.3.0.
 - Schema 11 adds the governed outbound-connection gateway, version/generation-bound connection health, bounded Slack/Jira Cloud/Confluence Cloud/webhook presets, and external capability integration with Goal Agent preparation and approval.

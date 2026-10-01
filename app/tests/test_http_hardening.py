@@ -203,8 +203,8 @@ class HttpHardeningTests(unittest.TestCase):
         self.assertEqual(200, status, body)
         self.assertEqual("ready", body["status"])
         self.assertEqual("local-durable-sqlite", body["runtime"])
-        self.assertEqual("2.1.0", body["version"])
-        self.assertEqual(12, body["schemaVersion"])
+        self.assertEqual("2.2.0", body["version"])
+        self.assertEqual(13, body["schemaVersion"])
         self.assertIsNone(headers.get("Set-Cookie"), headers)
 
     def test_strict_request_json_rejects_constants_and_duplicate_keys_then_recovers(self):

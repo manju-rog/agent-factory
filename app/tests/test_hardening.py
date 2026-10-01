@@ -164,12 +164,12 @@ class HardeningTests(unittest.TestCase):
 
     def test_migrations_and_new_control_manifests_survive_restart(self):
         versions = [row[0] for row in self.store.db.execute("SELECT version FROM schema_migrations ORDER BY version")]
-        self.assertEqual(list(range(1, 13)), versions)
+        self.assertEqual(list(range(1, 14)), versions)
         self.assertEqual("axiom.agent-manifest.v1", self.store.get("agents", "condition")["manifestVersion"])
         self.store.close()
         self.store = Store(self.path, latency=0)
-        self.assertEqual(12, self.store.db.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(12, self.store.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0])
+        self.assertEqual(13, self.store.db.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(13, self.store.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0])
 
     def test_unrelated_user_cannot_send_waiting_reminder(self):
         run = self.call("create_run", {"templateId": "customer-resolution", "mode": "fixture"}, AUTHOR)
